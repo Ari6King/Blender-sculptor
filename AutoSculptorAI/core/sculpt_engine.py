@@ -27,10 +27,17 @@ class SculptEngine:
                 analyzer = ReferenceAnalyzer(self.config)
                 reference_analysis = analyzer.analyze(self.ref_image_path)
 
-            knowledge_context = None
+            kb = KnowledgeBase(db_path=self.knowledge_db_path)
+            builtin_context = kb.get_builtin_knowledge(self.prompt)
+
+            scraped_context = None
             if self.use_knowledge:
-                kb = KnowledgeBase(db_path=self.knowledge_db_path)
-                knowledge_context = kb.get_relevant_knowledge(self.prompt)
+                scraped_context = kb.get_relevant_knowledge(self.prompt)
+
+            if builtin_context and scraped_context:
+                knowledge_context = builtin_context + "\n\n" + scraped_context
+            else:
+                knowledge_context = builtin_context or scraped_context
 
             enhanced_prompt = self._enhance_prompt(self.prompt)
 

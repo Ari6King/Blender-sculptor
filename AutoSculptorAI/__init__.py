@@ -49,7 +49,7 @@ def register():
         name="Prompt",
         description="Describe the 3D model you want to sculpt",
         default="",
-        maxlen=2048,
+        maxlen=8192,
     )
     bpy.types.Scene.autosculpt_ref_image = bpy.props.StringProperty(
         name="Reference Image",

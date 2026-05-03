@@ -167,13 +167,16 @@ class AUTOSCULPT_OT_Generate(Operator):
                     if scene.autosculpt_use_texture and scene.autosculpt_texture_image:
                         from ..core.texture_engine import TextureEngine
 
-                        tex_engine = TextureEngine(
-                            {
-                                "provider": scene.autosculpt_provider,
-                                "api_key": result.get("api_key", ""),
-                                "model": result.get("model", ""),
-                            }
-                        )
+                        tex_config = {
+                            "provider": scene.autosculpt_provider,
+                            "api_key": result.get("api_key", ""),
+                            "model": result.get("model", ""),
+                        }
+                        if scene.autosculpt_provider == "OLLAMA":
+                            prefs = context.preferences.addons.get("AutoSculptorAI")
+                            if prefs:
+                                tex_config["ollama_url"] = prefs.preferences.ollama_url
+                        tex_engine = TextureEngine(tex_config)
                         tex_path = bpy.path.abspath(scene.autosculpt_texture_image)
                         if os.path.isfile(tex_path):
                             tex_engine.extract_and_apply(obj, tex_path)
