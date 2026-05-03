@@ -428,16 +428,31 @@ class BlenderKnowledgeScraper:
 
         tracks_json = match.group(1)
 
-        en_match = re.search(
-            r'"baseUrl"\s*:\s*"(.*?)"[^}]*"languageCode"\s*:\s*"en',
-            tracks_json,
-        )
-        if en_match:
-            return en_match.group(1).replace("\\u0026", "&")
+        track_pattern = r'\{[^}]*?"baseUrl"\s*:\s*"(.*?)"[^}]*?\}'
+        tracks = []
+        for m in re.finditer(track_pattern, tracks_json, re.DOTALL):
+            track_str = m.group(0)
+            url = m.group(1).replace("\\u0026", "&")
+            lang_match = re.search(r'"languageCode"\s*:\s*"(\w+)"', track_str)
+            lang = lang_match.group(1) if lang_match else ""
+            is_auto = '"kind":"asr"' in track_str or '"kind": "asr"' in track_str
+            tracks.append({"url": url, "lang": lang, "auto": is_auto})
 
-        any_match = re.search(r'"baseUrl"\s*:\s*"(.*?)"', tracks_json)
-        if any_match:
-            return any_match.group(1).replace("\\u0026", "&")
+        for t in tracks:
+            if t["lang"] == "en" and not t["auto"]:
+                return t["url"]
+
+        for t in tracks:
+            if t["lang"] == "en" and t["auto"]:
+                return t["url"]
+
+        for t in tracks:
+            if not t["auto"]:
+                return t["url"]
+
+        for t in tracks:
+            if t["auto"]:
+                return t["url"]
 
         return None
 
