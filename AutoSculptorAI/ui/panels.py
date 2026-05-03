@@ -143,8 +143,9 @@ class AUTOSCULPT_PT_KnowledgePanel(Panel):
         row.operator("autosculpt.clear_knowledge", text="", icon="TRASH")
 
         layout.separator()
-        layout.label(text="Scrapes Blender docs and tutorials", icon="INFO")
-        layout.label(text="to improve AI sculpting quality.")
+        layout.label(text="Scrapes Blender docs, tutorials,", icon="INFO")
+        layout.label(text="and YouTube videos to improve AI quality.")
+        layout.label(text="YouTube toggle in addon preferences.")
 
 
 class AUTOSCULPT_PT_ToolsPanel(Panel):

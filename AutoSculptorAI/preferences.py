@@ -76,6 +76,18 @@ class AutoSculptorPreferences(AddonPreferences):
         default=False,
     )
 
+    scrape_youtube: BoolProperty(
+        name="Scrape YouTube Tutorials",
+        description="Include YouTube sculpting tutorials when building knowledge base",
+        default=True,
+    )
+
+    youtube_search_query: StringProperty(
+        name="YouTube Search Query",
+        description="Custom search query for YouTube tutorials (leave empty for defaults)",
+        default="",
+    )
+
     def draw(self, context):
         layout = self.layout
 
@@ -99,6 +111,8 @@ class AutoSculptorPreferences(AddonPreferences):
         box.prop(self, "knowledge_db_path")
         box.prop(self, "max_scrape_pages")
         box.prop(self, "auto_update_knowledge")
+        box.prop(self, "scrape_youtube")
+        box.prop(self, "youtube_search_query")
 
 
 classes = (AutoSculptorPreferences,)

@@ -16,6 +16,7 @@ class AUTOSCULPT_OT_Generate(Operator):
     _result = None
     _error = None
     _running = False
+    _generation_id = 0
 
     @classmethod
     def poll(cls, context):
@@ -51,6 +52,7 @@ class AUTOSCULPT_OT_Generate(Operator):
         scene.autosculpt_progress = 0.0
         AUTOSCULPT_OT_Generate._result = None
         AUTOSCULPT_OT_Generate._error = None
+        AUTOSCULPT_OT_Generate._generation_id += 1
         AUTOSCULPT_OT_Generate._running = True
 
         try:
@@ -87,11 +89,16 @@ class AUTOSCULPT_OT_Generate(Operator):
 
             engine = SculptEngine(config)
 
+            gen_id = AUTOSCULPT_OT_Generate._generation_id
+
             def run_generation():
                 try:
-                    AUTOSCULPT_OT_Generate._result = engine.generate()
+                    result = engine.generate()
+                    if AUTOSCULPT_OT_Generate._generation_id == gen_id:
+                        AUTOSCULPT_OT_Generate._result = result
                 except Exception as e:
-                    AUTOSCULPT_OT_Generate._error = str(e)
+                    if AUTOSCULPT_OT_Generate._generation_id == gen_id:
+                        AUTOSCULPT_OT_Generate._error = str(e)
 
             AUTOSCULPT_OT_Generate._thread = threading.Thread(target=run_generation)
             AUTOSCULPT_OT_Generate._thread.start()
@@ -332,10 +339,19 @@ class AUTOSCULPT_OT_ScrapeKnowledge(Operator):
         prefs_data = prefs.preferences
         db_path = bpy.path.abspath(prefs_data.knowledge_db_path) if prefs_data.knowledge_db_path else None
         max_pages = prefs_data.max_scrape_pages
+        scrape_youtube = prefs_data.scrape_youtube
+        youtube_queries = None
+        if prefs_data.youtube_search_query.strip():
+            youtube_queries = [q.strip() for q in prefs_data.youtube_search_query.split(",") if q.strip()]
 
         from ..knowledge.scraper import BlenderKnowledgeScraper
 
-        scraper_inst = BlenderKnowledgeScraper(db_path=db_path, max_pages=max_pages)
+        scraper_inst = BlenderKnowledgeScraper(
+            db_path=db_path,
+            max_pages=max_pages,
+            scrape_youtube=scrape_youtube,
+            youtube_queries=youtube_queries,
+        )
 
         context.scene.autosculpt_status = "Building knowledge base..."
 

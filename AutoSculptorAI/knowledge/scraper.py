@@ -1,5 +1,6 @@
 import urllib.request
 import urllib.error
+import urllib.parse
 import json
 import re
 import os
@@ -37,7 +38,18 @@ class _HTMLTextExtractor(HTMLParser):
 
 
 class BlenderKnowledgeScraper:
-    """Scrapes Blender documentation, tutorials, and sculpting guides to build a knowledge base."""
+    """Scrapes Blender documentation, tutorials, YouTube videos, and sculpting guides to build a knowledge base."""
+
+    YOUTUBE_SEARCH_QUERIES = [
+        "blender sculpting tutorial beginner",
+        "blender sculpt character head",
+        "blender sculpt organic forms",
+        "blender sculpting techniques professional",
+        "blender hard surface sculpting",
+        "blender creature sculpt workflow",
+        "blender texture painting sculpt",
+        "blender bmesh python scripting",
+    ]
 
     BLENDER_DOCS_URLS = [
         "https://docs.blender.org/manual/en/latest/sculpt_paint/sculpting/index.html",
@@ -162,17 +174,25 @@ class BlenderKnowledgeScraper:
         },
     ]
 
-    def __init__(self, db_path=None, max_pages=50):
+    def __init__(self, db_path=None, max_pages=50, scrape_youtube=True, youtube_queries=None):
         self.kb = KnowledgeBase(db_path=db_path)
         self.max_pages = max_pages
+        self.scrape_youtube = scrape_youtube
+        self.youtube_queries = youtube_queries or self.YOUTUBE_SEARCH_QUERIES
         self._ctx = ssl.create_default_context()
         self._pages_scraped = 0
+        self._videos_scraped = 0
 
     def scrape_all(self):
         self._store_builtin_knowledge()
         self._scrape_documentation()
         self._scrape_tutorials()
-        print(f"Auto Sculptor AI: Knowledge base built with {self._pages_scraped} pages scraped")
+        if self.scrape_youtube:
+            self._scrape_youtube_tutorials()
+        print(
+            f"Auto Sculptor AI: Knowledge base built with {self._pages_scraped} pages "
+            f"and {self._videos_scraped} YouTube videos scraped"
+        )
 
     def _store_builtin_knowledge(self):
         for entry in self.SCULPTING_KNOWLEDGE:
@@ -296,3 +316,139 @@ class BlenderKnowledgeScraper:
                 links.append(full_url)
 
         return links[:10]
+
+    def _scrape_youtube_tutorials(self):
+        max_videos = min(self.max_pages, 30)
+        for query in self.youtube_queries:
+            if self._videos_scraped >= max_videos:
+                break
+            try:
+                video_ids = self._youtube_search(query)
+                for vid_id in video_ids:
+                    if self._videos_scraped >= max_videos:
+                        break
+                    self._scrape_youtube_video(vid_id)
+            except Exception as e:
+                print(f"Auto Sculptor AI: Error searching YouTube for '{query}': {e}")
+
+    def _youtube_search(self, query):
+        encoded_query = urllib.parse.quote(query)
+        url = f"https://www.youtube.com/results?search_query={encoded_query}"
+        content = self._fetch_page(url)
+        if not content:
+            return []
+
+        video_ids = []
+        pattern = r'"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"'
+        seen = set()
+        for match in re.finditer(pattern, content):
+            vid_id = match.group(1)
+            if vid_id not in seen:
+                seen.add(vid_id)
+                video_ids.append(vid_id)
+            if len(video_ids) >= 5:
+                break
+
+        return video_ids
+
+    def _scrape_youtube_video(self, video_id):
+        try:
+            watch_url = f"https://www.youtube.com/watch?v={video_id}"
+            page_content = self._fetch_page(watch_url)
+            if not page_content:
+                return
+
+            title = self._extract_youtube_title(page_content)
+            if not title:
+                title = f"YouTube Video {video_id}"
+
+            transcript = self._extract_youtube_captions(video_id, page_content)
+            if not transcript or len(transcript) < 100:
+                description = self._extract_youtube_description(page_content)
+                if description and len(description) > 100:
+                    transcript = description
+
+            if not transcript or len(transcript) < 100:
+                return
+
+            self.kb.store(
+                topic=title,
+                content=transcript[:8000],
+                category="youtube_tutorial",
+                source=watch_url,
+            )
+            self._videos_scraped += 1
+            print(f"Auto Sculptor AI: Scraped YouTube video: {title}")
+
+        except Exception as e:
+            print(f"Auto Sculptor AI: Error scraping video {video_id}: {e}")
+
+    def _extract_youtube_title(self, page_content):
+        match = re.search(r'<title>(.*?)</title>', page_content, re.IGNORECASE | re.DOTALL)
+        if match:
+            title = html.unescape(match.group(1)).strip()
+            title = title.replace(" - YouTube", "").strip()
+            return title
+        match = re.search(r'"title"\s*:\s*\{"runs"\s*:\s*\[\{"text"\s*:\s*"(.*?)"', page_content)
+        if match:
+            return html.unescape(match.group(1))
+        return None
+
+    def _extract_youtube_captions(self, video_id, page_content):
+        caption_track_url = self._find_caption_track(page_content)
+        if not caption_track_url:
+            return None
+
+        caption_url = html.unescape(caption_track_url)
+        caption_content = self._fetch_page(caption_url)
+        if not caption_content:
+            return None
+
+        texts = re.findall(r'<text[^>]*>(.*?)</text>', caption_content, re.DOTALL)
+        if not texts:
+            return None
+
+        transcript_parts = []
+        for text in texts:
+            decoded = html.unescape(text).strip()
+            decoded = re.sub(r'<[^>]+>', '', decoded)
+            if decoded:
+                transcript_parts.append(decoded)
+
+        return " ".join(transcript_parts)
+
+    def _find_caption_track(self, page_content):
+        match = re.search(
+            r'"captionTracks"\s*:\s*\[(.*?)\]',
+            page_content,
+            re.DOTALL,
+        )
+        if not match:
+            return None
+
+        tracks_json = match.group(1)
+
+        en_match = re.search(
+            r'"baseUrl"\s*:\s*"(.*?)"[^}]*"languageCode"\s*:\s*"en',
+            tracks_json,
+        )
+        if en_match:
+            return en_match.group(1).replace("\\u0026", "&")
+
+        any_match = re.search(r'"baseUrl"\s*:\s*"(.*?)"', tracks_json)
+        if any_match:
+            return any_match.group(1).replace("\\u0026", "&")
+
+        return None
+
+    def _extract_youtube_description(self, page_content):
+        match = re.search(
+            r'"shortDescription"\s*:\s*"(.*?)"(?:,|\})',
+            page_content,
+            re.DOTALL,
+        )
+        if match:
+            desc = match.group(1)
+            desc = desc.replace("\\n", "\n").replace('\\"', '"')
+            return desc.strip()
+        return None
