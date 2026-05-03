@@ -49,6 +49,8 @@ class AUTOSCULPT_OT_Generate(Operator):
 
         scene.autosculpt_status = "Initializing..."
         scene.autosculpt_progress = 0.0
+        AUTOSCULPT_OT_Generate._result = None
+        AUTOSCULPT_OT_Generate._error = None
         AUTOSCULPT_OT_Generate._running = True
 
         ref_image_path = None
