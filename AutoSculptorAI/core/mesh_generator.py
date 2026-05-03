@@ -322,13 +322,13 @@ class MeshGenerator:
             obj.vertex_groups.new(name=name)
 
     def _smooth_mesh(self, obj, iterations):
-        bpy.context.view_layer.objects.active = obj
-        obj.select_set(True)
-
-        mod = obj.modifiers.new(name="AS_FinalSmooth", type="SMOOTH")
-        mod.iterations = iterations
-        mod.factor = 0.5
-        bpy.ops.object.modifier_apply(modifier=mod.name)
+        bm = bmesh.new()
+        bm.from_mesh(obj.data)
+        for _ in range(iterations):
+            bmesh.ops.smooth_vert(bm, verts=bm.verts, factor=0.5)
+        bm.to_mesh(obj.data)
+        bm.free()
+        obj.data.update()
 
     def _apply_material(self, obj, material_data, name):
         mat = bpy.data.materials.new(name=f"{name}_material")
