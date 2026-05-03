@@ -50,6 +50,8 @@ class AIClient:
             return self._openai_vision_with_prompt(image_path, system_prompt)
         elif self.provider == "ANTHROPIC":
             return self._anthropic_vision_with_prompt(image_path, system_prompt)
+        elif self.provider == "OLLAMA":
+            return self._ollama_vision_with_prompt(image_path, system_prompt)
         return None
 
     def _build_sculpt_system_prompt(self, knowledge_context=None):
@@ -290,6 +292,12 @@ class AIClient:
         return self._http_post(url, headers, payload, extract_path=["content", 0, "text"])
 
     def _ollama_vision(self, image_path):
+        return self._ollama_vision_with_prompt(
+            image_path,
+            "Analyze this image for 3D sculpting. Describe shape, structure, and details.",
+        )
+
+    def _ollama_vision_with_prompt(self, image_path, prompt):
         with open(image_path, "rb") as f:
             image_data = base64.b64encode(f.read()).decode("utf-8")
 
@@ -300,7 +308,7 @@ class AIClient:
             "messages": [
                 {
                     "role": "user",
-                    "content": "Analyze this image for 3D sculpting. Describe shape, structure, and details.",
+                    "content": prompt,
                     "images": [image_data],
                 }
             ],

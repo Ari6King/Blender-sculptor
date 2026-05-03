@@ -329,6 +329,11 @@ class AUTOSCULPT_OT_ScrapeKnowledge(Operator):
     _thread = None
     _done = False
     _error = None
+    _running = False
+
+    @classmethod
+    def poll(cls, context):
+        return not cls._running
 
     def execute(self, context):
         prefs = context.preferences.addons.get("AutoSculptorAI")
@@ -364,6 +369,7 @@ class AUTOSCULPT_OT_ScrapeKnowledge(Operator):
 
         AUTOSCULPT_OT_ScrapeKnowledge._done = False
         AUTOSCULPT_OT_ScrapeKnowledge._error = None
+        AUTOSCULPT_OT_ScrapeKnowledge._running = True
         AUTOSCULPT_OT_ScrapeKnowledge._thread = threading.Thread(target=run_scrape)
         AUTOSCULPT_OT_ScrapeKnowledge._thread.start()
 
@@ -378,12 +384,14 @@ class AUTOSCULPT_OT_ScrapeKnowledge(Operator):
         if AUTOSCULPT_OT_ScrapeKnowledge._error:
             error = AUTOSCULPT_OT_ScrapeKnowledge._error
             AUTOSCULPT_OT_ScrapeKnowledge._error = None
+            AUTOSCULPT_OT_ScrapeKnowledge._running = False
             context.scene.autosculpt_status = f"Scrape error: {error}"
             context.window_manager.event_timer_remove(self._timer)
             self.report({"ERROR"}, error)
             return {"CANCELLED"}
 
         if AUTOSCULPT_OT_ScrapeKnowledge._done:
+            AUTOSCULPT_OT_ScrapeKnowledge._running = False
             context.scene.autosculpt_status = "Knowledge base built successfully!"
             context.window_manager.event_timer_remove(self._timer)
             self.report({"INFO"}, "Knowledge base built successfully")
