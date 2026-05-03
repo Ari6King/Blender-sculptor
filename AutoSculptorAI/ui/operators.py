@@ -53,51 +53,59 @@ class AUTOSCULPT_OT_Generate(Operator):
         AUTOSCULPT_OT_Generate._error = None
         AUTOSCULPT_OT_Generate._running = True
 
-        ref_image_path = None
-        if scene.autosculpt_use_reference and scene.autosculpt_ref_image:
-            ref_image_path = bpy.path.abspath(scene.autosculpt_ref_image)
-            if not os.path.isfile(ref_image_path):
-                self.report({"WARNING"}, "Reference image not found, proceeding without it")
-                ref_image_path = None
+        try:
+            ref_image_path = None
+            if scene.autosculpt_use_reference and scene.autosculpt_ref_image:
+                ref_image_path = bpy.path.abspath(scene.autosculpt_ref_image)
+                if not os.path.isfile(ref_image_path):
+                    self.report({"WARNING"}, "Reference image not found, proceeding without it")
+                    ref_image_path = None
 
-        from ..core.sculpt_engine import SculptEngine
+            from ..core.sculpt_engine import SculptEngine
 
-        config = {
-            "provider": provider,
-            "prompt": prompt,
-            "detail_level": scene.autosculpt_detail_level,
-            "subdivisions": scene.autosculpt_subdivisions,
-            "smooth_iterations": scene.autosculpt_smooth_iterations,
-            "symmetry": scene.autosculpt_symmetry,
-            "ref_image_path": ref_image_path,
-            "use_knowledge": scene.autosculpt_scrape_knowledge,
-            "knowledge_db_path": bpy.path.abspath(prefs_data.knowledge_db_path) if prefs_data.knowledge_db_path else None,
-        }
+            config = {
+                "provider": provider,
+                "prompt": prompt,
+                "detail_level": scene.autosculpt_detail_level,
+                "subdivisions": scene.autosculpt_subdivisions,
+                "smooth_iterations": scene.autosculpt_smooth_iterations,
+                "symmetry": scene.autosculpt_symmetry,
+                "ref_image_path": ref_image_path,
+                "use_knowledge": scene.autosculpt_scrape_knowledge,
+                "knowledge_db_path": bpy.path.abspath(prefs_data.knowledge_db_path) if prefs_data.knowledge_db_path else None,
+            }
 
-        if provider == "OPENAI":
-            config["api_key"] = prefs_data.openai_api_key
-            config["model"] = prefs_data.openai_model
-        elif provider == "ANTHROPIC":
-            config["api_key"] = prefs_data.anthropic_api_key
-            config["model"] = prefs_data.anthropic_model
-        elif provider == "OLLAMA":
-            config["ollama_url"] = prefs_data.ollama_url
-            config["model"] = prefs_data.ollama_model
+            if provider == "OPENAI":
+                config["api_key"] = prefs_data.openai_api_key
+                config["model"] = prefs_data.openai_model
+            elif provider == "ANTHROPIC":
+                config["api_key"] = prefs_data.anthropic_api_key
+                config["model"] = prefs_data.anthropic_model
+            elif provider == "OLLAMA":
+                config["ollama_url"] = prefs_data.ollama_url
+                config["model"] = prefs_data.ollama_model
 
-        engine = SculptEngine(config)
+            engine = SculptEngine(config)
 
-        def run_generation():
-            try:
-                AUTOSCULPT_OT_Generate._result = engine.generate()
-            except Exception as e:
-                AUTOSCULPT_OT_Generate._error = str(e)
+            def run_generation():
+                try:
+                    AUTOSCULPT_OT_Generate._result = engine.generate()
+                except Exception as e:
+                    AUTOSCULPT_OT_Generate._error = str(e)
 
-        AUTOSCULPT_OT_Generate._thread = threading.Thread(target=run_generation)
-        AUTOSCULPT_OT_Generate._thread.start()
+            AUTOSCULPT_OT_Generate._thread = threading.Thread(target=run_generation)
+            AUTOSCULPT_OT_Generate._thread.start()
 
-        self._timer = context.window_manager.event_timer_add(0.5, window=context.window)
-        context.window_manager.modal_handler_add(self)
-        return {"RUNNING_MODAL"}
+            self._timer = context.window_manager.event_timer_add(0.5, window=context.window)
+            context.window_manager.modal_handler_add(self)
+            return {"RUNNING_MODAL"}
+
+        except Exception as e:
+            AUTOSCULPT_OT_Generate._running = False
+            scene.autosculpt_status = f"Error: {e}"
+            scene.autosculpt_progress = 0.0
+            self.report({"ERROR"}, str(e))
+            return {"CANCELLED"}
 
     def modal(self, context, event):
         if event.type != "TIMER":

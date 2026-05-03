@@ -101,6 +101,7 @@ class SculptEngine:
                             new_stroke["points"] = [
                                 [p[0] + offset, p[1] + offset, p[2]]
                                 for p in stroke["points"]
+                                if len(p) >= 3
                             ]
                         extra_strokes.append(new_stroke)
                 mesh_data["sculpt_strokes"] = strokes + extra_strokes

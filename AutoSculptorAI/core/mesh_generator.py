@@ -267,6 +267,8 @@ class MeshGenerator:
                         falloff = (1.0 - dist / radius) ** 2
                         self._apply_brush_effect(v, brush, center, strength * falloff * sign, radius)
 
+            bm.normal_update()
+
         bm.to_mesh(obj.data)
         bm.free()
         obj.data.update()
@@ -342,7 +344,7 @@ class MeshGenerator:
         bsdf = nodes.new("ShaderNodeBsdfPrincipled")
         bsdf.location = (0, 0)
 
-        base_color = material_data.get("base_color", [0.8, 0.8, 0.8, 1.0])
+        base_color = list(material_data.get("base_color", [0.8, 0.8, 0.8, 1.0]))
         if len(base_color) == 3:
             base_color.append(1.0)
         bsdf.inputs["Base Color"].default_value = base_color
