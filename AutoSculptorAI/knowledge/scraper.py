@@ -182,6 +182,7 @@ class BlenderKnowledgeScraper:
         self._ctx = ssl.create_default_context()
         self._pages_scraped = 0
         self._videos_scraped = 0
+        self._skipped = 0
 
     def scrape_all(self):
         self._store_builtin_knowledge()
@@ -190,8 +191,9 @@ class BlenderKnowledgeScraper:
         if self.scrape_youtube:
             self._scrape_youtube_tutorials()
         print(
-            f"Auto Sculptor AI: Knowledge base built with {self._pages_scraped} pages "
-            f"and {self._videos_scraped} YouTube videos scraped"
+            f"Auto Sculptor AI: Knowledge base built — {self._pages_scraped} new pages "
+            f"and {self._videos_scraped} new YouTube videos scraped "
+            f"({self._skipped} sources skipped as already scraped)"
         )
 
     def _store_builtin_knowledge(self):
@@ -207,6 +209,9 @@ class BlenderKnowledgeScraper:
         for url in self.BLENDER_DOCS_URLS:
             if self._pages_scraped >= self.max_pages:
                 break
+            if self.kb.is_source_scraped(url):
+                self._skipped += 1
+                continue
             try:
                 content = self._fetch_page(url)
                 if content:
@@ -219,6 +224,7 @@ class BlenderKnowledgeScraper:
                             category="documentation",
                             source=url,
                         )
+                        self.kb.mark_source_scraped(url)
                         self._pages_scraped += 1
 
                         links = self._extract_links(content, url)
@@ -234,6 +240,9 @@ class BlenderKnowledgeScraper:
         for source in self.TUTORIAL_SOURCES:
             if self._pages_scraped >= self.max_pages:
                 break
+            if self.kb.is_source_scraped(source["url"]):
+                self._skipped += 1
+                continue
             try:
                 content = self._fetch_page(source["url"])
                 if content:
@@ -245,11 +254,15 @@ class BlenderKnowledgeScraper:
                             category=source["category"],
                             source=source["url"],
                         )
+                        self.kb.mark_source_scraped(source["url"])
                         self._pages_scraped += 1
             except Exception as e:
                 print(f"Auto Sculptor AI: Error scraping tutorial {source['url']}: {e}")
 
     def _scrape_subpage(self, url):
+        if self.kb.is_source_scraped(url):
+            self._skipped += 1
+            return
         try:
             content = self._fetch_page(url)
             if content:
@@ -262,6 +275,7 @@ class BlenderKnowledgeScraper:
                         category="documentation",
                         source=url,
                     )
+                    self.kb.mark_source_scraped(url)
                     self._pages_scraped += 1
         except Exception as e:
             print(f"Auto Sculptor AI: Error scraping subpage {url}: {e}")
@@ -352,8 +366,11 @@ class BlenderKnowledgeScraper:
         return video_ids
 
     def _scrape_youtube_video(self, video_id):
+        watch_url = f"https://www.youtube.com/watch?v={video_id}"
+        if self.kb.is_source_scraped(watch_url):
+            self._skipped += 1
+            return
         try:
-            watch_url = f"https://www.youtube.com/watch?v={video_id}"
             page_content = self._fetch_page(watch_url)
             if not page_content:
                 return
@@ -377,6 +394,7 @@ class BlenderKnowledgeScraper:
                 category="youtube_tutorial",
                 source=watch_url,
             )
+            self.kb.mark_source_scraped(watch_url)
             self._videos_scraped += 1
             print(f"Auto Sculptor AI: Scraped YouTube video: {title}")
 

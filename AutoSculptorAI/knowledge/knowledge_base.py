@@ -21,7 +21,7 @@ class KnowledgeBase:
     def _ensure_db(self):
         os.makedirs(self.db_dir, exist_ok=True)
         if not os.path.isfile(self.db_file):
-            self._save({"entries": [], "metadata": {"version": 1, "total_entries": 0}})
+            self._save({"entries": [], "scraped_sources": [], "metadata": {"version": 1, "total_entries": 0}})
 
     def _load(self):
         try:
@@ -114,8 +114,22 @@ class KnowledgeBase:
         data = self._load()
         return [e for e in data.get("entries", []) if e.get("category") == category]
 
+    def is_source_scraped(self, source_url):
+        """Check if a URL or video ID has already been scraped."""
+        data = self._load()
+        return source_url in data.get("scraped_sources", [])
+
+    def mark_source_scraped(self, source_url):
+        """Record that a URL or video ID has been scraped."""
+        data = self._load()
+        scraped = data.get("scraped_sources", [])
+        if source_url not in scraped:
+            scraped.append(source_url)
+            data["scraped_sources"] = scraped
+            self._save(data)
+
     def clear(self):
-        self._save({"entries": [], "metadata": {"version": 1, "total_entries": 0}})
+        self._save({"entries": [], "scraped_sources": [], "metadata": {"version": 1, "total_entries": 0}})
 
     BUILTIN_KNOWLEDGE = [
         {
