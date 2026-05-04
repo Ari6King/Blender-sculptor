@@ -209,29 +209,30 @@ class BlenderKnowledgeScraper:
         for url in self.BLENDER_DOCS_URLS:
             if self._pages_scraped >= self.max_pages:
                 break
-            if self.kb.is_source_scraped(url):
-                self._skipped += 1
-                continue
+            already_scraped = self.kb.is_source_scraped(url)
             try:
                 content = self._fetch_page(url)
                 if content:
-                    text = self._extract_text(content)
-                    if text and len(text) > 100:
-                        topic = self._extract_title(content) or url.split("/")[-1].replace(".html", "")
-                        self.kb.store(
-                            topic=topic,
-                            content=text[:5000],
-                            category="documentation",
-                            source=url,
-                        )
-                        self.kb.mark_source_scraped(url)
-                        self._pages_scraped += 1
+                    if not already_scraped:
+                        text = self._extract_text(content)
+                        if text and len(text) > 100:
+                            topic = self._extract_title(content) or url.split("/")[-1].replace(".html", "")
+                            self.kb.store(
+                                topic=topic,
+                                content=text[:5000],
+                                category="documentation",
+                                source=url,
+                            )
+                            self.kb.mark_source_scraped(url)
+                            self._pages_scraped += 1
+                    else:
+                        self._skipped += 1
 
-                        links = self._extract_links(content, url)
-                        for link in links[:5]:
-                            if self._pages_scraped >= self.max_pages:
-                                break
-                            self._scrape_subpage(link)
+                    links = self._extract_links(content, url)
+                    for link in links[:5]:
+                        if self._pages_scraped >= self.max_pages:
+                            break
+                        self._scrape_subpage(link)
 
             except Exception as e:
                 print(f"Auto Sculptor AI: Error scraping {url}: {e}")
