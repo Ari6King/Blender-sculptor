@@ -28,7 +28,7 @@ class KnowledgeBase:
             with open(self.db_file, "r", encoding="utf-8") as f:
                 return json.load(f)
         except (json.JSONDecodeError, FileNotFoundError):
-            return {"entries": [], "metadata": {"version": 1, "total_entries": 0}}
+            return {"entries": [], "scraped_sources": [], "metadata": {"version": 1, "total_entries": 0}}
 
     def _save(self, data):
         with open(self.db_file, "w", encoding="utf-8") as f:
