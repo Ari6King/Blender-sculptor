@@ -19,7 +19,7 @@ if addon_dir not in sys.path:
 
 from . import preferences
 from .ui import panels, operators
-from .core import ai_client, sculpt_engine, mesh_generator, texture_engine, reference_analyzer
+from .core import ai_client, sculpt_engine, mesh_generator, texture_engine, reference_analyzer, learning_engine
 from .knowledge import scraper, knowledge_base
 
 
@@ -30,6 +30,7 @@ modules = [
     mesh_generator,
     texture_engine,
     reference_analyzer,
+    learning_engine,
     scraper,
     knowledge_base,
     operators,
@@ -136,6 +137,18 @@ def register():
         description="YouTube playlist URLs to scrape (comma-separated)",
         default="",
     )
+    bpy.types.Scene.autosculpt_learning_urls = bpy.props.StringProperty(
+        name="Learning URLs",
+        description="YouTube URLs or playlist URLs for the AI to study (comma-separated)",
+        default="",
+        maxlen=8192,
+    )
+    bpy.types.Scene.autosculpt_learning_report = bpy.props.StringProperty(
+        name="Learning Report",
+        description="Report from the last learning session",
+        default="",
+        maxlen=16384,
+    )
 
     print("Auto Sculptor AI: Registered successfully")
 
@@ -160,6 +173,8 @@ def unregister():
         "autosculpt_provider",
         "autosculpt_youtube_search",
         "autosculpt_youtube_playlists",
+        "autosculpt_learning_urls",
+        "autosculpt_learning_report",
     ]
     for prop in props:
         if hasattr(bpy.types.Scene, prop):

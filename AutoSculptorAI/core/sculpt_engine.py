@@ -3,6 +3,7 @@ import os
 from .ai_client import AIClient
 from .reference_analyzer import ReferenceAnalyzer
 from ..knowledge.knowledge_base import KnowledgeBase
+from .learning_engine import LearningEngine
 
 
 class SculptEngine:
@@ -34,6 +35,14 @@ class SculptEngine:
                 knowledge_context = builtin_context + "\n\n" + scraped_context
             else:
                 knowledge_context = builtin_context or scraped_context
+
+            le = LearningEngine(db_path=self.knowledge_db_path)
+            learned_rules = le.format_rules_for_prompt(self.prompt)
+            if learned_rules:
+                if knowledge_context:
+                    knowledge_context += "\n\n" + learned_rules
+                else:
+                    knowledge_context = learned_rules
 
             enhanced_prompt = self._enhance_prompt(self.prompt)
 

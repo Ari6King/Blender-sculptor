@@ -154,6 +154,45 @@ class AUTOSCULPT_PT_KnowledgePanel(Panel):
         layout.label(text="and YouTube to grow the AI's memory.")
 
 
+class AUTOSCULPT_PT_LearningPanel(Panel):
+    bl_label = "Learning Mode"
+    bl_idname = "AUTOSCULPT_PT_learning"
+    bl_space_type = "VIEW_3D"
+    bl_region_type = "UI"
+    bl_category = "Auto Sculptor AI"
+    bl_parent_id = "AUTOSCULPT_PT_main"
+    bl_options = {"DEFAULT_CLOSED"}
+
+    def draw(self, context):
+        layout = self.layout
+        scene = context.scene
+
+        layout.label(text="Teach the AI by giving it content to study.", icon="LIGHT")
+        layout.label(text="It will extract rules and adjust its behavior.")
+
+        layout.separator()
+        layout.label(text="YouTube URLs / Playlists (comma-separated):", icon="URL")
+        layout.prop(scene, "autosculpt_learning_urls", text="")
+
+        layout.separator()
+        row = layout.row(align=True)
+        row.scale_y = 1.5
+        row.operator("autosculpt.start_learning", text="Study", icon="SOLO_ON")
+
+        row = layout.row(align=True)
+        row.operator("autosculpt.view_learning_stats", text="What I Know", icon="INFO")
+        row.operator("autosculpt.clear_learned", text="", icon="TRASH")
+
+        report = scene.autosculpt_learning_report
+        if report:
+            layout.separator()
+            box = layout.box()
+            box.label(text="Learning Report:", icon="TEXT")
+            for line in report.split("\n"):
+                if line.strip():
+                    box.label(text=line.strip())
+
+
 class AUTOSCULPT_PT_ToolsPanel(Panel):
     bl_label = "Tools"
     bl_idname = "AUTOSCULPT_PT_tools"
@@ -181,6 +220,7 @@ classes = (
     AUTOSCULPT_PT_TexturePanel,
     AUTOSCULPT_PT_SettingsPanel,
     AUTOSCULPT_PT_KnowledgePanel,
+    AUTOSCULPT_PT_LearningPanel,
     AUTOSCULPT_PT_ToolsPanel,
 )
 
