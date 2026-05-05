@@ -98,7 +98,7 @@ class BlenderKnowledgeScraper:
                 "icosphere for uniform topology distribution. Use the Monkey (Suzanne) as a "
                 "starting point for character heads."
             ),
-            "category": "technique",
+            "category": "general",
         },
         {
             "topic": "Subdivision Workflow",
@@ -108,7 +108,7 @@ class BlenderKnowledgeScraper:
                 "subdivision for fine details like pores and wrinkles (levels 5-6). Use "
                 "Multires modifier for non-destructive subdivision sculpting."
             ),
-            "category": "workflow",
+            "category": "general",
         },
         {
             "topic": "Brush Techniques",
@@ -121,7 +121,7 @@ class BlenderKnowledgeScraper:
                 "surfaces to a uniform height. Snake Hook: Drag and pull surface for tentacles, "
                 "horns, and flowing shapes."
             ),
-            "category": "technique",
+            "category": "general",
         },
         {
             "topic": "Symmetry in Sculpting",
@@ -130,7 +130,7 @@ class BlenderKnowledgeScraper:
                 "modifier for perfect symmetry. Break symmetry only after main forms are "
                 "established. Use Radial symmetry for flowers, eyes, and circular patterns."
             ),
-            "category": "technique",
+            "category": "general",
         },
         {
             "topic": "Retopology",
@@ -139,7 +139,7 @@ class BlenderKnowledgeScraper:
                 "Voxel Remesh creates uniform quads. QuadriFlow Remesh creates flow-following "
                 "quads. Use Shrinkwrap modifier to project retopo mesh onto sculpt."
             ),
-            "category": "workflow",
+            "category": "general",
         },
         {
             "topic": "Texture Painting",
@@ -149,7 +149,7 @@ class BlenderKnowledgeScraper:
                 "stencil mapping to project reference images onto the surface. Bake high-poly "
                 "details to normal maps for low-poly meshes."
             ),
-            "category": "technique",
+            "category": "general",
         },
         {
             "topic": "Material Setup for Sculpts",
@@ -159,7 +159,7 @@ class BlenderKnowledgeScraper:
                 "for micro-detail. Use subsurface scattering for skin and organic materials. "
                 "Use metallic for armors, weapons, and metal objects."
             ),
-            "category": "materials",
+            "category": "general",
         },
         {
             "topic": "Procedural Deformation",
@@ -170,7 +170,7 @@ class BlenderKnowledgeScraper:
                 "provides broad deformation control. Use these for major shape adjustments "
                 "before fine sculpting."
             ),
-            "category": "technique",
+            "category": "general",
         },
     ]
 
@@ -220,10 +220,10 @@ class BlenderKnowledgeScraper:
                         text = self._extract_text(content)
                         if text and len(text) > 100:
                             topic = self._extract_title(content) or url.split("/")[-1].replace(".html", "")
-                            self.kb.store(
+                            self.kb.store_distilled(
                                 topic=topic,
-                                content=text[:5000],
-                                category="documentation",
+                                raw_content=text[:5000],
+                                category="general",
                                 source=url,
                             )
                             self.kb.mark_source_scraped(url)
@@ -252,10 +252,10 @@ class BlenderKnowledgeScraper:
                 if content:
                     text = self._extract_text(content)
                     if text and len(text) > 50:
-                        self.kb.store(
+                        self.kb.store_distilled(
                             topic=source["name"],
-                            content=text[:5000],
-                            category=source["category"],
+                            raw_content=text[:5000],
+                            category="general",
                             source=source["url"],
                         )
                         self.kb.mark_source_scraped(source["url"])
@@ -273,10 +273,10 @@ class BlenderKnowledgeScraper:
                 text = self._extract_text(content)
                 if text and len(text) > 100:
                     topic = self._extract_title(content) or url.split("/")[-1].replace(".html", "")
-                    self.kb.store(
+                    self.kb.store_distilled(
                         topic=topic,
-                        content=text[:5000],
-                        category="documentation",
+                        raw_content=text[:5000],
+                        category="general",
                         source=url,
                     )
                     self.kb.mark_source_scraped(url)
@@ -405,20 +405,20 @@ class BlenderKnowledgeScraper:
                 return
 
             if len(transcript) <= self.TRANSCRIPT_CHUNK_SIZE:
-                self.kb.store(
+                self.kb.store_distilled(
                     topic=title,
-                    content=transcript,
-                    category="youtube_tutorial",
+                    raw_content=transcript,
+                    category="general",
                     source=watch_url,
                 )
             else:
                 chunks = self._chunk_transcript(transcript)
                 for i, chunk in enumerate(chunks):
                     chunk_title = f"{title} (Part {i + 1}/{len(chunks)})"
-                    self.kb.store(
+                    self.kb.store_distilled(
                         topic=chunk_title,
-                        content=chunk,
-                        category="youtube_tutorial",
+                        raw_content=chunk,
+                        category="general",
                         source=f"{watch_url}#part{i + 1}",
                     )
             self.kb.mark_source_scraped(watch_url)

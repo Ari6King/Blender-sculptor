@@ -114,7 +114,17 @@ class AIClient:
         )
 
         if knowledge_context:
-            base += f"\n\nAdditional sculpting knowledge from Blender tutorials:\n{knowledge_context}\n"
+            base += (
+                "\n\nYou have access to expert sculpting knowledge. Apply these techniques "
+                "directly when generating the mesh data — use the specific brush types, "
+                "deformation strategies, and topology approaches described below. Do not "
+                "ignore this guidance:\n\n"
+                f"{knowledge_context}\n\n"
+                "IMPORTANT: Incorporate the above techniques into your JSON output. For example, "
+                "if the knowledge mentions using Clay Strips for muscle definition, include "
+                "clay_strips brush strokes in your sculpt_strokes array. If it mentions "
+                "specific proportions, reflect those in your scale and deformation values.\n"
+            )
 
         return base
 
