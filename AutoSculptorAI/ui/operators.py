@@ -352,6 +352,10 @@ class AUTOSCULPT_OT_ScrapeKnowledge(Operator):
         if prefs_data.youtube_search_query.strip():
             youtube_queries = [q.strip() for q in prefs_data.youtube_search_query.split(",") if q.strip()]
 
+        youtube_playlists = []
+        if prefs_data.youtube_playlists.strip():
+            youtube_playlists = [u.strip() for u in prefs_data.youtube_playlists.split(",") if u.strip()]
+
         from ..knowledge.scraper import BlenderKnowledgeScraper
 
         scraper_inst = BlenderKnowledgeScraper(
@@ -359,6 +363,7 @@ class AUTOSCULPT_OT_ScrapeKnowledge(Operator):
             max_pages=max_pages,
             scrape_youtube=scrape_youtube,
             youtube_queries=youtube_queries,
+            youtube_playlists=youtube_playlists,
         )
 
         context.scene.autosculpt_status = "Building knowledge base..."

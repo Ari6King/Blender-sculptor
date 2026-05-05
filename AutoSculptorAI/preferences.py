@@ -88,6 +88,12 @@ class AutoSculptorPreferences(AddonPreferences):
         default="",
     )
 
+    youtube_playlists: StringProperty(
+        name="YouTube Playlists",
+        description="Comma-separated YouTube playlist URLs to scrape all videos from",
+        default="",
+    )
+
     def draw(self, context):
         layout = self.layout
 
@@ -113,6 +119,7 @@ class AutoSculptorPreferences(AddonPreferences):
         box.prop(self, "auto_update_knowledge")
         box.prop(self, "scrape_youtube")
         box.prop(self, "youtube_search_query")
+        box.prop(self, "youtube_playlists")
 
 
 classes = (AutoSculptorPreferences,)

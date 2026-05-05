@@ -174,11 +174,14 @@ class BlenderKnowledgeScraper:
         },
     ]
 
-    def __init__(self, db_path=None, max_pages=50, scrape_youtube=True, youtube_queries=None):
+    TRANSCRIPT_CHUNK_SIZE = 6000
+
+    def __init__(self, db_path=None, max_pages=50, scrape_youtube=True, youtube_queries=None, youtube_playlists=None):
         self.kb = KnowledgeBase(db_path=db_path)
         self.max_pages = max_pages
         self.scrape_youtube = scrape_youtube
         self.youtube_queries = youtube_queries or self.YOUTUBE_SEARCH_QUERIES
+        self.youtube_playlists = youtube_playlists or []
         self._ctx = ssl.create_default_context()
         self._pages_scraped = 0
         self._videos_scraped = 0
@@ -333,7 +336,7 @@ class BlenderKnowledgeScraper:
         return links[:10]
 
     def _scrape_youtube_tutorials(self):
-        max_videos = min(self.max_pages, 30)
+        max_videos = min(self.max_pages, 100)
         for query in self.youtube_queries:
             if self._videos_scraped >= max_videos:
                 break
@@ -345,6 +348,18 @@ class BlenderKnowledgeScraper:
                     self._scrape_youtube_video(vid_id)
             except Exception as e:
                 print(f"Auto Sculptor AI: Error searching YouTube for '{query}': {e}")
+
+        for playlist_url in self.youtube_playlists:
+            if self._videos_scraped >= max_videos:
+                break
+            try:
+                video_ids = self._extract_playlist_video_ids(playlist_url)
+                for vid_id in video_ids:
+                    if self._videos_scraped >= max_videos:
+                        break
+                    self._scrape_youtube_video(vid_id)
+            except Exception as e:
+                print(f"Auto Sculptor AI: Error scraping playlist '{playlist_url}': {e}")
 
     def _youtube_search(self, query):
         encoded_query = urllib.parse.quote(query)
@@ -389,15 +404,26 @@ class BlenderKnowledgeScraper:
             if not transcript or len(transcript) < 100:
                 return
 
-            self.kb.store(
-                topic=title,
-                content=transcript[:8000],
-                category="youtube_tutorial",
-                source=watch_url,
-            )
+            if len(transcript) <= self.TRANSCRIPT_CHUNK_SIZE:
+                self.kb.store(
+                    topic=title,
+                    content=transcript,
+                    category="youtube_tutorial",
+                    source=watch_url,
+                )
+            else:
+                chunks = self._chunk_transcript(transcript)
+                for i, chunk in enumerate(chunks):
+                    chunk_title = f"{title} (Part {i + 1}/{len(chunks)})"
+                    self.kb.store(
+                        topic=chunk_title,
+                        content=chunk,
+                        category="youtube_tutorial",
+                        source=f"{watch_url}#part{i + 1}",
+                    )
             self.kb.mark_source_scraped(watch_url)
             self._videos_scraped += 1
-            print(f"Auto Sculptor AI: Scraped YouTube video: {title}")
+            print(f"Auto Sculptor AI: Scraped YouTube video: {title} ({len(transcript)} chars)")
 
         except Exception as e:
             print(f"Auto Sculptor AI: Error scraping video {video_id}: {e}")
@@ -474,6 +500,49 @@ class BlenderKnowledgeScraper:
                 return t["url"]
 
         return None
+
+    def _chunk_transcript(self, transcript):
+        """Split a long transcript into chunks at sentence boundaries."""
+        words = transcript.split()
+        chunks = []
+        current = []
+        current_len = 0
+        for word in words:
+            current.append(word)
+            current_len += len(word) + 1
+            if current_len >= self.TRANSCRIPT_CHUNK_SIZE:
+                chunks.append(" ".join(current))
+                current = []
+                current_len = 0
+        if current:
+            chunks.append(" ".join(current))
+        return chunks
+
+    def _extract_playlist_video_ids(self, playlist_url):
+        """Extract all video IDs from a YouTube playlist page."""
+        playlist_id = None
+        match = re.search(r'[?&]list=([a-zA-Z0-9_-]+)', playlist_url)
+        if match:
+            playlist_id = match.group(1)
+        if not playlist_id:
+            return []
+
+        url = f"https://www.youtube.com/playlist?list={playlist_id}"
+        content = self._fetch_page(url)
+        if not content:
+            return []
+
+        video_ids = []
+        pattern = r'"videoId"\s*:\s*"([a-zA-Z0-9_-]{11})"'
+        seen = set()
+        for m in re.finditer(pattern, content):
+            vid_id = m.group(1)
+            if vid_id not in seen:
+                seen.add(vid_id)
+                video_ids.append(vid_id)
+
+        print(f"Auto Sculptor AI: Found {len(video_ids)} videos in playlist {playlist_id}")
+        return video_ids
 
     def _extract_youtube_description(self, page_content):
         match = re.search(
