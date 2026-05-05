@@ -45,28 +45,34 @@ class MeshyClient:
         if on_progress:
             on_progress("Downloading 3D model...", 92)
 
-        glb_url = None
+        download_url = None
+        actual_format = target_format
         model_urls = task_data.get("model_urls", {})
         if isinstance(model_urls, dict):
-            glb_url = model_urls.get("glb") or model_urls.get("obj") or model_urls.get("fbx")
-        if not glb_url:
+            for fmt in [target_format, "glb", "obj", "fbx"]:
+                if model_urls.get(fmt):
+                    download_url = model_urls[fmt]
+                    actual_format = fmt
+                    break
+        if not download_url:
             for fmt in ["glb", "obj", "fbx"]:
                 url_key = f"model_url_{fmt}"
                 if task_data.get(url_key):
-                    glb_url = task_data[url_key]
+                    download_url = task_data[url_key]
+                    actual_format = fmt
                     break
 
-        if not glb_url:
+        if not download_url:
             model_url = task_data.get("model_url")
             if model_url:
-                glb_url = model_url
+                download_url = model_url
 
-        if not glb_url:
+        if not download_url:
             raise RuntimeError(
                 f"No downloadable model URL in task response. Keys: {list(task_data.keys())}"
             )
 
-        file_path = self._download_file(glb_url, target_format)
+        file_path = self._download_file(download_url, actual_format)
 
         if on_progress:
             on_progress("Model downloaded!", 95)
@@ -82,7 +88,7 @@ class MeshyClient:
 
         return {
             "file_path": file_path,
-            "format": target_format,
+            "format": actual_format,
             "task_data": task_data,
             "texture_urls": texture_urls,
         }

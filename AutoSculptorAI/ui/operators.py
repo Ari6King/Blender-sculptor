@@ -56,6 +56,8 @@ class AUTOSCULPT_OT_Generate(Operator):
         scene.autosculpt_progress = 0.0
         AUTOSCULPT_OT_Generate._result = None
         AUTOSCULPT_OT_Generate._error = None
+        AUTOSCULPT_OT_Generate._progress_msg = ""
+        AUTOSCULPT_OT_Generate._progress_pct = 0.0
         AUTOSCULPT_OT_Generate._generation_id += 1
         AUTOSCULPT_OT_Generate._running = True
 
@@ -167,8 +169,14 @@ class AUTOSCULPT_OT_Generate(Operator):
 
                 if mode == "meshy":
                     file_path = result.get("file_path", "")
+                    fmt = result.get("format", "glb")
                     if file_path and os.path.isfile(file_path):
-                        bpy.ops.import_scene.gltf(filepath=file_path)
+                        if fmt == "obj":
+                            bpy.ops.wm.obj_import(filepath=file_path)
+                        elif fmt == "fbx":
+                            bpy.ops.import_scene.fbx(filepath=file_path)
+                        else:
+                            bpy.ops.import_scene.gltf(filepath=file_path)
                         imported = context.selected_objects
                         if imported:
                             obj = imported[0]
