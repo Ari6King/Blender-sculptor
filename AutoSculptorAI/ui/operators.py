@@ -43,12 +43,14 @@ class AUTOSCULPT_OT_Generate(Operator):
         provider = scene.autosculpt_provider
         prefs_data = prefs.preferences
 
-        if provider == "OPENAI" and not prefs_data.openai_api_key:
-            self.report({"ERROR"}, "OpenAI API key not set. Check addon preferences.")
-            return {"CANCELLED"}
-        elif provider == "ANTHROPIC" and not prefs_data.anthropic_api_key:
-            self.report({"ERROR"}, "Anthropic API key not set. Check addon preferences.")
-            return {"CANCELLED"}
+        has_meshy = bool(prefs_data.meshy_api_key)
+        if not has_meshy:
+            if provider == "OPENAI" and not prefs_data.openai_api_key:
+                self.report({"ERROR"}, "OpenAI API key not set. Check addon preferences.")
+                return {"CANCELLED"}
+            elif provider == "ANTHROPIC" and not prefs_data.anthropic_api_key:
+                self.report({"ERROR"}, "Anthropic API key not set. Check addon preferences.")
+                return {"CANCELLED"}
 
         scene.autosculpt_status = "Initializing..."
         scene.autosculpt_progress = 0.0
