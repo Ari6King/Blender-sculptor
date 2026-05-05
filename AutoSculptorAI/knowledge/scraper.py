@@ -220,9 +220,9 @@ class BlenderKnowledgeScraper:
                         text = self._extract_text(content)
                         if text and len(text) > 100:
                             topic = self._extract_title(content) or url.split("/")[-1].replace(".html", "")
-                            self.kb.store(
+                            self.kb.store_distilled(
                                 topic=topic,
-                                content=text[:5000],
+                                raw_content=text[:5000],
                                 category="documentation",
                                 source=url,
                             )
@@ -252,9 +252,9 @@ class BlenderKnowledgeScraper:
                 if content:
                     text = self._extract_text(content)
                     if text and len(text) > 50:
-                        self.kb.store(
+                        self.kb.store_distilled(
                             topic=source["name"],
-                            content=text[:5000],
+                            raw_content=text[:5000],
                             category=source["category"],
                             source=source["url"],
                         )
@@ -273,9 +273,9 @@ class BlenderKnowledgeScraper:
                 text = self._extract_text(content)
                 if text and len(text) > 100:
                     topic = self._extract_title(content) or url.split("/")[-1].replace(".html", "")
-                    self.kb.store(
+                    self.kb.store_distilled(
                         topic=topic,
-                        content=text[:5000],
+                        raw_content=text[:5000],
                         category="documentation",
                         source=url,
                     )
@@ -405,9 +405,9 @@ class BlenderKnowledgeScraper:
                 return
 
             if len(transcript) <= self.TRANSCRIPT_CHUNK_SIZE:
-                self.kb.store(
+                self.kb.store_distilled(
                     topic=title,
-                    content=transcript,
+                    raw_content=transcript,
                     category="youtube_tutorial",
                     source=watch_url,
                 )
@@ -415,9 +415,9 @@ class BlenderKnowledgeScraper:
                 chunks = self._chunk_transcript(transcript)
                 for i, chunk in enumerate(chunks):
                     chunk_title = f"{title} (Part {i + 1}/{len(chunks)})"
-                    self.kb.store(
+                    self.kb.store_distilled(
                         topic=chunk_title,
-                        content=chunk,
+                        raw_content=chunk,
                         category="youtube_tutorial",
                         source=f"{watch_url}#part{i + 1}",
                     )
