@@ -454,10 +454,16 @@ class KnowledgeBase:
             score = _score_entry(entry, query_tokens, query_token_set, idf)
             if entry.get("category") == prompt_category:
                 score *= 1.5
-            scored.append((score, entry))
+            if score > 0:
+                scored.append((score, entry))
 
         scored.sort(key=lambda x: x[0], reverse=True)
         top = scored[:max_results]
+
+        if not top:
+            fallback = [e for e in self.BUILTIN_KNOWLEDGE
+                        if e.get("category") in {"brush_technique", "workflow"}]
+            top = [(1.0, e) for e in fallback[:max_results]]
 
         parts = []
         for _, entry in top:
