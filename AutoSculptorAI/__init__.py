@@ -126,10 +126,15 @@ def register():
         ],
         default="OPENAI",
     )
-    bpy.types.Scene.autosculpt_scrape_knowledge = bpy.props.BoolProperty(
-        name="Build Knowledge Base",
-        description="Scrape Blender docs and tutorials to improve AI sculpting",
-        default=False,
+    bpy.types.Scene.autosculpt_youtube_search = bpy.props.StringProperty(
+        name="YouTube Search",
+        description="Search queries for YouTube tutorials (comma-separated, leave empty for defaults)",
+        default="",
+    )
+    bpy.types.Scene.autosculpt_youtube_playlists = bpy.props.StringProperty(
+        name="YouTube Playlists",
+        description="YouTube playlist URLs to scrape (comma-separated)",
+        default="",
     )
 
     print("Auto Sculptor AI: Registered successfully")
@@ -153,7 +158,8 @@ def unregister():
         "autosculpt_progress",
         "autosculpt_status",
         "autosculpt_provider",
-        "autosculpt_scrape_knowledge",
+        "autosculpt_youtube_search",
+        "autosculpt_youtube_playlists",
     ]
     for prop in props:
         if hasattr(bpy.types.Scene, prop):

@@ -124,7 +124,7 @@ class AUTOSCULPT_PT_SettingsPanel(Panel):
 
 
 class AUTOSCULPT_PT_KnowledgePanel(Panel):
-    bl_label = "Knowledge Base"
+    bl_label = "Expand Knowledge"
     bl_idname = "AUTOSCULPT_PT_knowledge"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
@@ -136,16 +136,22 @@ class AUTOSCULPT_PT_KnowledgePanel(Panel):
         layout = self.layout
         scene = context.scene
 
-        layout.prop(scene, "autosculpt_scrape_knowledge")
+        layout.label(text="YouTube Search", icon="URL")
+        layout.prop(scene, "autosculpt_youtube_search", text="")
+
+        layout.label(text="YouTube Playlists", icon="URL")
+        layout.prop(scene, "autosculpt_youtube_playlists", text="")
+
+        layout.separator()
 
         row = layout.row(align=True)
-        row.operator("autosculpt.scrape_knowledge", text="Build Knowledge Base", icon="URL")
+        row.scale_y = 1.3
+        row.operator("autosculpt.scrape_knowledge", text="Expand Knowledge", icon="PLUS")
         row.operator("autosculpt.clear_knowledge", text="", icon="TRASH")
 
         layout.separator()
         layout.label(text="Scrapes Blender docs, tutorials,", icon="INFO")
-        layout.label(text="and YouTube videos to improve AI quality.")
-        layout.label(text="YouTube toggle in addon preferences.")
+        layout.label(text="and YouTube to grow the AI's memory.")
 
 
 class AUTOSCULPT_PT_ToolsPanel(Panel):
