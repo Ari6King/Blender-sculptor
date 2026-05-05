@@ -215,10 +215,12 @@ class AUTOSCULPT_OT_Generate(Operator):
                             return {"FINISHED"}
                         else:
                             scene.autosculpt_status = "Failed to import model"
+                            scene.autosculpt_progress = 0.0
                             self.report({"ERROR"}, f"{fmt.upper()} file imported but no objects found")
                             return {"CANCELLED"}
                     else:
                         scene.autosculpt_status = "Model file not found"
+                        scene.autosculpt_progress = 0.0
                         self.report({"ERROR"}, f"Downloaded model not found: {file_path}")
                         return {"CANCELLED"}
 
