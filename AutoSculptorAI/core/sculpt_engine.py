@@ -18,8 +18,76 @@ class SculptEngine:
         self.symmetry = config.get("symmetry", True)
         self.ref_image_path = config.get("ref_image_path")
         self.knowledge_db_path = config.get("knowledge_db_path")
+        self.use_meshy = config.get("use_meshy", False)
+        self.meshy_api_key = config.get("meshy_api_key", "")
+        self._progress_callback = None
+
+    def set_progress_callback(self, callback):
+        self._progress_callback = callback
 
     def generate(self):
+        if self.use_meshy and self.meshy_api_key:
+            return self._generate_with_meshy()
+        return self._generate_with_llm()
+
+    def _generate_with_meshy(self):
+        try:
+            from .meshy_client import MeshyClient
+
+            enhanced_prompt = self._build_meshy_prompt()
+
+            client = MeshyClient(self.meshy_api_key)
+
+            model_type = "standard"
+            if self.detail_level == "LOW":
+                model_type = "lowpoly"
+
+            result = client.text_to_3d(
+                prompt=enhanced_prompt,
+                model_type=model_type,
+                enable_pbr=True,
+                target_format="glb",
+                on_progress=self._progress_callback,
+            )
+
+            return {
+                "success": True,
+                "mode": "meshy",
+                "file_path": result["file_path"],
+                "format": result["format"],
+                "texture_urls": result.get("texture_urls", {}),
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _build_meshy_prompt(self):
+        """Enrich the user prompt with knowledge and reference analysis for Meshy."""
+        parts = [self.prompt]
+
+        if self.ref_image_path and os.path.isfile(self.ref_image_path):
+            try:
+                analyzer = ReferenceAnalyzer(self.config)
+                analysis = analyzer.analyze(self.ref_image_path)
+                if analysis:
+                    parts.append(f"Reference details: {analysis}")
+            except Exception:
+                pass
+
+        kb = KnowledgeBase(db_path=self.knowledge_db_path)
+        builtin = kb.get_builtin_knowledge(self.prompt)
+        scraped = kb.get_relevant_knowledge(self.prompt)
+        knowledge = ""
+        if builtin and scraped:
+            knowledge = builtin + " " + scraped
+        elif builtin or scraped:
+            knowledge = builtin or scraped
+        if knowledge:
+            parts.append(f"Style guidance: {knowledge[:200]}")
+
+        return ". ".join(parts)[:600]
+
+    def _generate_with_llm(self):
         try:
             reference_analysis = None
             if self.ref_image_path and os.path.isfile(self.ref_image_path):
@@ -57,6 +125,7 @@ class SculptEngine:
 
             return {
                 "success": True,
+                "mode": "llm",
                 "mesh_data": mesh_data,
                 "api_key": self.config.get("api_key", ""),
                 "model": self.config.get("model", ""),

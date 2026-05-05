@@ -19,7 +19,7 @@ if addon_dir not in sys.path:
 
 from . import preferences
 from .ui import panels, operators
-from .core import ai_client, sculpt_engine, mesh_generator, texture_engine, reference_analyzer
+from .core import ai_client, sculpt_engine, mesh_generator, texture_engine, reference_analyzer, meshy_client
 from .knowledge import scraper, knowledge_base
 
 
@@ -30,6 +30,7 @@ modules = [
     mesh_generator,
     texture_engine,
     reference_analyzer,
+    meshy_client,
     scraper,
     knowledge_base,
     operators,

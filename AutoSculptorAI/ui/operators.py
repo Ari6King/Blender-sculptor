@@ -17,6 +17,8 @@ class AUTOSCULPT_OT_Generate(Operator):
     _error = None
     _running = False
     _generation_id = 0
+    _progress_msg = ""
+    _progress_pct = 0.0
 
     @classmethod
     def poll(cls, context):
@@ -86,9 +88,20 @@ class AUTOSCULPT_OT_Generate(Operator):
                 config["ollama_url"] = prefs_data.ollama_url
                 config["model"] = prefs_data.ollama_model
 
+            if prefs_data.meshy_api_key:
+                config["use_meshy"] = True
+                config["meshy_api_key"] = prefs_data.meshy_api_key
+
             engine = SculptEngine(config)
 
             gen_id = AUTOSCULPT_OT_Generate._generation_id
+
+            def progress_cb(msg, pct):
+                if AUTOSCULPT_OT_Generate._generation_id == gen_id:
+                    AUTOSCULPT_OT_Generate._progress_msg = msg
+                    AUTOSCULPT_OT_Generate._progress_pct = pct
+
+            engine.set_progress_callback(progress_cb)
 
             def run_generation():
                 try:
@@ -126,6 +139,10 @@ class AUTOSCULPT_OT_Generate(Operator):
 
         scene = context.scene
 
+        if AUTOSCULPT_OT_Generate._progress_msg:
+            scene.autosculpt_status = AUTOSCULPT_OT_Generate._progress_msg
+            scene.autosculpt_progress = AUTOSCULPT_OT_Generate._progress_pct
+
         if AUTOSCULPT_OT_Generate._error:
             error = AUTOSCULPT_OT_Generate._error
             AUTOSCULPT_OT_Generate._error = None
@@ -144,6 +161,30 @@ class AUTOSCULPT_OT_Generate(Operator):
             AUTOSCULPT_OT_Generate._result = None
 
             if result and result.get("success"):
+                mode = result.get("mode", "llm")
+
+                if mode == "meshy":
+                    file_path = result.get("file_path", "")
+                    if file_path and os.path.isfile(file_path):
+                        bpy.ops.import_scene.gltf(filepath=file_path)
+                        imported = context.selected_objects
+                        if imported:
+                            obj = imported[0]
+                            obj["autosculpt_generated"] = True
+                            obj["autosculpt_prompt"] = scene.autosculpt_prompt
+                            scene.autosculpt_status = "Generation complete! (Meshy.ai)"
+                            scene.autosculpt_progress = 100.0
+                            self.report({"INFO"}, f"3D model imported: {obj.name}")
+                            return {"FINISHED"}
+                        else:
+                            scene.autosculpt_status = "Failed to import model"
+                            self.report({"ERROR"}, "GLB file imported but no objects found")
+                            return {"CANCELLED"}
+                    else:
+                        scene.autosculpt_status = "Model file not found"
+                        self.report({"ERROR"}, f"Downloaded model not found: {file_path}")
+                        return {"CANCELLED"}
+
                 from ..core.mesh_generator import MeshGenerator
 
                 generator = MeshGenerator()
