@@ -188,7 +188,7 @@ class AUTOSCULPT_OT_Generate(Operator):
                             return {"FINISHED"}
                         else:
                             scene.autosculpt_status = "Failed to import model"
-                            self.report({"ERROR"}, "GLB file imported but no objects found")
+                            self.report({"ERROR"}, f"{fmt.upper()} file imported but no objects found")
                             return {"CANCELLED"}
                     else:
                         scene.autosculpt_status = "Model file not found"
