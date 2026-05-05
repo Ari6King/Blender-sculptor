@@ -185,6 +185,33 @@ class AUTOSCULPT_OT_Generate(Operator):
                             scene.autosculpt_status = "Generation complete! (Meshy.ai)"
                             scene.autosculpt_progress = 100.0
                             self.report({"INFO"}, f"3D model imported: {obj.name}")
+
+                            if scene.autosculpt_use_texture and scene.autosculpt_texture_image:
+                                from ..core.texture_engine import TextureEngine
+
+                                tex_config = {
+                                    "provider": scene.autosculpt_provider,
+                                    "api_key": "",
+                                    "model": "",
+                                }
+                                prefs_tex = context.preferences.addons.get("AutoSculptorAI")
+                                if prefs_tex:
+                                    p = prefs_tex.preferences
+                                    if scene.autosculpt_provider == "OPENAI":
+                                        tex_config["api_key"] = p.openai_api_key
+                                        tex_config["model"] = p.openai_model
+                                    elif scene.autosculpt_provider == "ANTHROPIC":
+                                        tex_config["api_key"] = p.anthropic_api_key
+                                        tex_config["model"] = p.anthropic_model
+                                    elif scene.autosculpt_provider == "OLLAMA":
+                                        tex_config["ollama_url"] = p.ollama_url
+                                        tex_config["model"] = p.ollama_model
+                                tex_engine = TextureEngine(tex_config)
+                                tex_path = bpy.path.abspath(scene.autosculpt_texture_image)
+                                if os.path.isfile(tex_path):
+                                    tex_engine.extract_and_apply(obj, tex_path)
+                                    self.report({"INFO"}, "Texture applied successfully")
+
                             return {"FINISHED"}
                         else:
                             scene.autosculpt_status = "Failed to import model"
