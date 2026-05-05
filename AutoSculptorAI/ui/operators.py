@@ -73,7 +73,6 @@ class AUTOSCULPT_OT_Generate(Operator):
                 "smooth_iterations": scene.autosculpt_smooth_iterations,
                 "symmetry": scene.autosculpt_symmetry,
                 "ref_image_path": ref_image_path,
-                "use_knowledge": scene.autosculpt_scrape_knowledge,
                 "knowledge_db_path": bpy.path.abspath(prefs_data.knowledge_db_path) if prefs_data.knowledge_db_path else None,
             }
 
@@ -344,24 +343,27 @@ class AUTOSCULPT_OT_ScrapeKnowledge(Operator):
             self.report({"ERROR"}, "Addon preferences not found")
             return {"CANCELLED"}
 
+        scene = context.scene
         prefs_data = prefs.preferences
         db_path = bpy.path.abspath(prefs_data.knowledge_db_path) if prefs_data.knowledge_db_path else None
         max_pages = prefs_data.max_scrape_pages
-        scrape_youtube = prefs_data.scrape_youtube
+
         youtube_queries = None
-        if prefs_data.youtube_search_query.strip():
-            youtube_queries = [q.strip() for q in prefs_data.youtube_search_query.split(",") if q.strip()]
+        yt_search = scene.autosculpt_youtube_search.strip()
+        if yt_search:
+            youtube_queries = [q.strip() for q in yt_search.split(",") if q.strip()]
 
         youtube_playlists = []
-        if prefs_data.youtube_playlists.strip():
-            youtube_playlists = [u.strip() for u in prefs_data.youtube_playlists.split(",") if u.strip()]
+        yt_playlists = scene.autosculpt_youtube_playlists.strip()
+        if yt_playlists:
+            youtube_playlists = [u.strip() for u in yt_playlists.split(",") if u.strip()]
 
         from ..knowledge.scraper import BlenderKnowledgeScraper
 
         scraper_inst = BlenderKnowledgeScraper(
             db_path=db_path,
             max_pages=max_pages,
-            scrape_youtube=scrape_youtube,
+            scrape_youtube=True,
             youtube_queries=youtube_queries,
             youtube_playlists=youtube_playlists,
         )
