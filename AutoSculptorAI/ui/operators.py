@@ -17,6 +17,8 @@ class AUTOSCULPT_OT_Generate(Operator):
     _error = None
     _running = False
     _generation_id = 0
+    _progress_msg = ""
+    _progress_pct = 0.0
 
     @classmethod
     def poll(cls, context):
@@ -41,17 +43,28 @@ class AUTOSCULPT_OT_Generate(Operator):
         provider = scene.autosculpt_provider
         prefs_data = prefs.preferences
 
-        if provider == "OPENAI" and not prefs_data.openai_api_key:
-            self.report({"ERROR"}, "OpenAI API key not set. Check addon preferences.")
+        gen_mode = scene.autosculpt_generation_mode
+        has_meshy = bool(prefs_data.meshy_api_key)
+
+        if gen_mode == "MESHY" and not has_meshy:
+            self.report({"ERROR"}, "Meshy 3D mode selected but no API key set. Add it in preferences or switch mode.")
             return {"CANCELLED"}
-        elif provider == "ANTHROPIC" and not prefs_data.anthropic_api_key:
-            self.report({"ERROR"}, "Anthropic API key not set. Check addon preferences.")
-            return {"CANCELLED"}
+
+        needs_llm = gen_mode == "SCULPT" or (gen_mode == "AUTO" and not has_meshy)
+        if needs_llm:
+            if provider == "OPENAI" and not prefs_data.openai_api_key:
+                self.report({"ERROR"}, "OpenAI API key not set. Check addon preferences.")
+                return {"CANCELLED"}
+            elif provider == "ANTHROPIC" and not prefs_data.anthropic_api_key:
+                self.report({"ERROR"}, "Anthropic API key not set. Check addon preferences.")
+                return {"CANCELLED"}
 
         scene.autosculpt_status = "Initializing..."
         scene.autosculpt_progress = 0.0
         AUTOSCULPT_OT_Generate._result = None
         AUTOSCULPT_OT_Generate._error = None
+        AUTOSCULPT_OT_Generate._progress_msg = ""
+        AUTOSCULPT_OT_Generate._progress_pct = 0.0
         AUTOSCULPT_OT_Generate._generation_id += 1
         AUTOSCULPT_OT_Generate._running = True
 
@@ -86,9 +99,20 @@ class AUTOSCULPT_OT_Generate(Operator):
                 config["ollama_url"] = prefs_data.ollama_url
                 config["model"] = prefs_data.ollama_model
 
+            config["generation_mode"] = gen_mode
+            if prefs_data.meshy_api_key:
+                config["meshy_api_key"] = prefs_data.meshy_api_key
+
             engine = SculptEngine(config)
 
             gen_id = AUTOSCULPT_OT_Generate._generation_id
+
+            def progress_cb(msg, pct):
+                if AUTOSCULPT_OT_Generate._generation_id == gen_id:
+                    AUTOSCULPT_OT_Generate._progress_msg = msg
+                    AUTOSCULPT_OT_Generate._progress_pct = pct
+
+            engine.set_progress_callback(progress_cb)
 
             def run_generation():
                 try:
@@ -126,6 +150,10 @@ class AUTOSCULPT_OT_Generate(Operator):
 
         scene = context.scene
 
+        if AUTOSCULPT_OT_Generate._progress_msg:
+            scene.autosculpt_status = AUTOSCULPT_OT_Generate._progress_msg
+            scene.autosculpt_progress = AUTOSCULPT_OT_Generate._progress_pct
+
         if AUTOSCULPT_OT_Generate._error:
             error = AUTOSCULPT_OT_Generate._error
             AUTOSCULPT_OT_Generate._error = None
@@ -144,6 +172,65 @@ class AUTOSCULPT_OT_Generate(Operator):
             AUTOSCULPT_OT_Generate._result = None
 
             if result and result.get("success"):
+                mode = result.get("mode", "llm")
+
+                if mode == "meshy":
+                    file_path = result.get("file_path", "")
+                    fmt = result.get("format", "glb")
+                    if file_path and os.path.isfile(file_path):
+                        if fmt == "obj":
+                            bpy.ops.wm.obj_import(filepath=file_path)
+                        elif fmt == "fbx":
+                            bpy.ops.import_scene.fbx(filepath=file_path)
+                        else:
+                            bpy.ops.import_scene.gltf(filepath=file_path)
+                        imported = context.selected_objects
+                        if imported:
+                            obj = imported[0]
+                            obj["autosculpt_generated"] = True
+                            obj["autosculpt_prompt"] = scene.autosculpt_prompt
+                            scene.autosculpt_status = "Generation complete! (Meshy.ai)"
+                            scene.autosculpt_progress = 100.0
+                            self.report({"INFO"}, f"3D model imported: {obj.name}")
+
+                            if scene.autosculpt_use_texture and scene.autosculpt_texture_image:
+                                from ..core.texture_engine import TextureEngine
+
+                                tex_config = {
+                                    "provider": scene.autosculpt_provider,
+                                    "api_key": "",
+                                    "model": "",
+                                }
+                                prefs_tex = context.preferences.addons.get("AutoSculptorAI")
+                                if prefs_tex:
+                                    p = prefs_tex.preferences
+                                    if scene.autosculpt_provider == "OPENAI":
+                                        tex_config["api_key"] = p.openai_api_key
+                                        tex_config["model"] = p.openai_model
+                                    elif scene.autosculpt_provider == "ANTHROPIC":
+                                        tex_config["api_key"] = p.anthropic_api_key
+                                        tex_config["model"] = p.anthropic_model
+                                    elif scene.autosculpt_provider == "OLLAMA":
+                                        tex_config["ollama_url"] = p.ollama_url
+                                        tex_config["model"] = p.ollama_model
+                                tex_engine = TextureEngine(tex_config)
+                                tex_path = bpy.path.abspath(scene.autosculpt_texture_image)
+                                if os.path.isfile(tex_path):
+                                    tex_engine.extract_and_apply(obj, tex_path)
+                                    self.report({"INFO"}, "Texture applied successfully")
+
+                            return {"FINISHED"}
+                        else:
+                            scene.autosculpt_status = "Failed to import model"
+                            scene.autosculpt_progress = 0.0
+                            self.report({"ERROR"}, f"{fmt.upper()} file imported but no objects found")
+                            return {"CANCELLED"}
+                    else:
+                        scene.autosculpt_status = "Model file not found"
+                        scene.autosculpt_progress = 0.0
+                        self.report({"ERROR"}, f"Downloaded model not found: {file_path}")
+                        return {"CANCELLED"}
+
                 from ..core.mesh_generator import MeshGenerator
 
                 generator = MeshGenerator()
@@ -545,6 +632,292 @@ class AUTOSCULPT_OT_ClearGenerated(Operator):
         return {"FINISHED"}
 
 
+class AUTOSCULPT_OT_StartLearning(Operator):
+    bl_idname = "autosculpt.start_learning"
+    bl_label = "Study Content"
+    bl_description = "Enter Learning Mode — the AI actively studies the provided content and extracts sculpting rules"
+    bl_options = {"REGISTER"}
+
+    _timer = None
+    _thread = None
+    _done = False
+    _error = None
+    _running = False
+    _report = None
+    _progress_msg = ""
+
+    @classmethod
+    def poll(cls, context):
+        return not cls._running
+
+    def execute(self, context):
+        scene = context.scene
+        urls = scene.autosculpt_learning_urls.strip()
+
+        if not urls:
+            self.report({"ERROR"}, "Enter YouTube URLs or playlist URLs to study")
+            return {"CANCELLED"}
+
+        prefs = context.preferences.addons.get("AutoSculptorAI")
+        db_path = None
+        if prefs:
+            db_path = bpy.path.abspath(prefs.preferences.knowledge_db_path) if prefs.preferences.knowledge_db_path else None
+
+        url_list = [u.strip() for u in urls.replace("\n", ",").split(",") if u.strip()]
+
+        AUTOSCULPT_OT_StartLearning._done = False
+        AUTOSCULPT_OT_StartLearning._error = None
+        AUTOSCULPT_OT_StartLearning._running = True
+        AUTOSCULPT_OT_StartLearning._report = None
+        AUTOSCULPT_OT_StartLearning._progress_msg = "Entering learning mode..."
+
+        scene.autosculpt_status = "Learning mode: studying content..."
+        scene.autosculpt_learning_report = ""
+
+        def run_learning():
+            try:
+                from ..core.learning_engine import LearningEngine
+                from ..knowledge.scraper import BlenderKnowledgeScraper
+
+                engine = LearningEngine(db_path=db_path)
+                scraper = BlenderKnowledgeScraper(
+                    db_path=db_path,
+                    max_pages=5,
+                    scrape_youtube=False,
+                )
+
+                all_reports = []
+                total = len(url_list)
+                for i, url in enumerate(url_list):
+                    AUTOSCULPT_OT_StartLearning._progress_msg = (
+                        f"Studying {i + 1}/{total}: {url[:50]}..."
+                    )
+
+                    title, content = _fetch_study_content(scraper, url)
+                    if not content:
+                        all_reports.append({
+                            "source": url,
+                            "techniques_found": 0,
+                            "rules_learned": 0,
+                            "error": "Could not extract content",
+                        })
+                        continue
+
+                    report = engine.study(content, title)
+                    all_reports.append(report)
+
+                AUTOSCULPT_OT_StartLearning._report = all_reports
+                AUTOSCULPT_OT_StartLearning._done = True
+            except Exception as e:
+                AUTOSCULPT_OT_StartLearning._error = str(e)
+
+        AUTOSCULPT_OT_StartLearning._thread = threading.Thread(target=run_learning)
+        AUTOSCULPT_OT_StartLearning._thread.start()
+
+        self._timer = context.window_manager.event_timer_add(1.0, window=context.window)
+        context.window_manager.modal_handler_add(self)
+        return {"RUNNING_MODAL"}
+
+    def modal(self, context, event):
+        if event.type != "TIMER":
+            return {"PASS_THROUGH"}
+
+        scene = context.scene
+
+        if AUTOSCULPT_OT_StartLearning._progress_msg:
+            scene.autosculpt_status = AUTOSCULPT_OT_StartLearning._progress_msg
+
+        if AUTOSCULPT_OT_StartLearning._error:
+            error = AUTOSCULPT_OT_StartLearning._error
+            AUTOSCULPT_OT_StartLearning._error = None
+            AUTOSCULPT_OT_StartLearning._running = False
+            scene.autosculpt_status = f"Learning error: {error}"
+            context.window_manager.event_timer_remove(self._timer)
+            self.report({"ERROR"}, error)
+            return {"CANCELLED"}
+
+        if AUTOSCULPT_OT_StartLearning._done:
+            AUTOSCULPT_OT_StartLearning._running = False
+            reports = AUTOSCULPT_OT_StartLearning._report or []
+
+            total_techniques = sum(r.get("techniques_found", 0) for r in reports)
+            total_rules = sum(r.get("rules_learned", 0) for r in reports)
+
+            report_lines = [f"Studied {len(reports)} source(s):"]
+            report_lines.append(f"  Found {total_techniques} techniques")
+            report_lines.append(f"  Learned {total_rules} new rules")
+
+            for report in reports:
+                if report.get("behavior_changes"):
+                    report_lines.append(f"\n  From '{report.get('source', '?')}':")
+                    for change in report["behavior_changes"]:
+                        report_lines.append(f"    - {change}")
+                if report.get("key_rules"):
+                    for rule in report["key_rules"][:2]:
+                        report_lines.append(f"    Rule: {rule}")
+
+            report_text = "\n".join(report_lines)
+            scene.autosculpt_learning_report = report_text
+            scene.autosculpt_status = f"Learning complete! {total_rules} rules learned"
+            context.window_manager.event_timer_remove(self._timer)
+            self.report({"INFO"}, f"Learning complete: {total_rules} rules learned from {len(reports)} sources")
+            return {"FINISHED"}
+
+        return {"PASS_THROUGH"}
+
+
+class AUTOSCULPT_OT_ViewLearningStats(Operator):
+    bl_idname = "autosculpt.view_learning_stats"
+    bl_label = "View Learning Stats"
+    bl_description = "Show what the AI has learned so far"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        from ..core.learning_engine import LearningEngine
+
+        prefs = context.preferences.addons.get("AutoSculptorAI")
+        db_path = None
+        if prefs:
+            db_path = bpy.path.abspath(prefs.preferences.knowledge_db_path) if prefs.preferences.knowledge_db_path else None
+
+        engine = LearningEngine(db_path=db_path)
+        stats = engine.get_learning_stats()
+
+        lines = [f"Total rules learned: {stats['total_rules']}"]
+        lines.append(f"Training sessions: {stats['total_sessions']}")
+        if stats["avg_confidence"] > 0:
+            lines.append(f"Average confidence: {stats['avg_confidence']:.0%}")
+        lines.append(f"Parameter adjustments: {stats['parameter_adjustments']}")
+        if stats["categories"]:
+            lines.append("\nKnowledge by category:")
+            for cat, count in stats["categories"].items():
+                lines.append(f"  {cat}: {count} rules")
+
+        context.scene.autosculpt_learning_report = "\n".join(lines)
+        self.report({"INFO"}, f"AI has learned {stats['total_rules']} rules across {stats['total_sessions']} sessions")
+        return {"FINISHED"}
+
+
+class AUTOSCULPT_OT_ClearLearned(Operator):
+    bl_idname = "autosculpt.clear_learned"
+    bl_label = "Clear Learned Rules"
+    bl_description = "Clear all learned rules and parameter adjustments"
+    bl_options = {"REGISTER"}
+
+    def execute(self, context):
+        from ..core.learning_engine import LearningEngine
+
+        prefs = context.preferences.addons.get("AutoSculptorAI")
+        db_path = None
+        if prefs:
+            db_path = bpy.path.abspath(prefs.preferences.knowledge_db_path) if prefs.preferences.knowledge_db_path else None
+
+        engine = LearningEngine(db_path=db_path)
+        engine.clear_learned()
+        context.scene.autosculpt_learning_report = ""
+        context.scene.autosculpt_status = "Learned rules cleared"
+        self.report({"INFO"}, "All learned rules cleared")
+        return {"FINISHED"}
+
+
+def _fetch_study_content(scraper, url):
+    """Fetch content from a URL for the learning engine to study."""
+    url = url.strip()
+
+    if "youtube.com" in url or "youtu.be" in url:
+        video_id = None
+        if "v=" in url:
+            video_id = url.split("v=")[1].split("&")[0]
+        elif "youtu.be/" in url:
+            video_id = url.split("youtu.be/")[1].split("?")[0]
+
+        if video_id:
+            title, transcript = _get_youtube_transcript(scraper, video_id)
+            if transcript:
+                return title or f"YouTube: {video_id}", transcript
+
+    try:
+        content = scraper._fetch_page(url)
+        if content:
+            text = scraper._extract_text(content)
+            title = scraper._extract_title(content) or url
+            if text and len(text) > 50:
+                return title, text
+    except Exception:
+        pass
+
+    return url, None
+
+
+def _get_youtube_transcript(scraper, video_id):
+    """Get YouTube video transcript using the scraper's existing methods."""
+    import urllib.request
+    import urllib.error
+    import json
+    import re
+    import ssl
+    import html as html_module
+
+    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+    title = f"YouTube: {video_id}"
+
+    try:
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(
+            watch_url,
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                )
+            },
+        )
+        with urllib.request.urlopen(req, context=ctx, timeout=15) as resp:
+            page = resp.read().decode("utf-8", errors="replace")
+
+        title_match = re.search(r'"title"\s*:\s*"([^"]+)"', page)
+        if title_match:
+            title = title_match.group(1)
+
+        caption_match = re.search(r'"captionTracks"\s*:\s*(\[.*?\])', page)
+        if not caption_match:
+            return title, None
+
+        tracks = json.loads(caption_match.group(1))
+        caption_url = None
+        for track in tracks:
+            lang = track.get("languageCode", "")
+            kind = track.get("kind", "")
+            if lang.startswith("en") and kind != "asr":
+                caption_url = track.get("baseUrl")
+                break
+        if not caption_url:
+            for track in tracks:
+                lang = track.get("languageCode", "")
+                if lang.startswith("en"):
+                    caption_url = track.get("baseUrl")
+                    break
+        if not caption_url and tracks:
+            caption_url = tracks[0].get("baseUrl")
+
+        if not caption_url:
+            return title, None
+
+        req2 = urllib.request.Request(
+            caption_url,
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        with urllib.request.urlopen(req2, context=ctx, timeout=15) as resp2:
+            caption_xml = resp2.read().decode("utf-8", errors="replace")
+
+        texts = re.findall(r'<text[^>]*>(.*?)</text>', caption_xml, re.DOTALL)
+        transcript = " ".join(html_module.unescape(t) for t in texts)
+        return title, transcript
+
+    except Exception:
+        return title, None
+
+
 classes = (
     AUTOSCULPT_OT_Generate,
     AUTOSCULPT_OT_Cancel,
@@ -553,6 +926,9 @@ classes = (
     AUTOSCULPT_OT_ExtractTexture,
     AUTOSCULPT_OT_ScrapeKnowledge,
     AUTOSCULPT_OT_ClearKnowledge,
+    AUTOSCULPT_OT_StartLearning,
+    AUTOSCULPT_OT_ViewLearningStats,
+    AUTOSCULPT_OT_ClearLearned,
     AUTOSCULPT_OT_Remesh,
     AUTOSCULPT_OT_SmoothSculpt,
     AUTOSCULPT_OT_ApplySymmetry,

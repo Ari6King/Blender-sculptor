@@ -19,7 +19,7 @@ if addon_dir not in sys.path:
 
 from . import preferences
 from .ui import panels, operators
-from .core import ai_client, sculpt_engine, mesh_generator, texture_engine, reference_analyzer
+from .core import ai_client, sculpt_engine, mesh_generator, texture_engine, reference_analyzer, learning_engine, meshy_client
 from .knowledge import scraper, knowledge_base
 
 
@@ -30,6 +30,8 @@ modules = [
     mesh_generator,
     texture_engine,
     reference_analyzer,
+    learning_engine,
+    meshy_client,
     scraper,
     knowledge_base,
     operators,
@@ -126,6 +128,16 @@ def register():
         ],
         default="OPENAI",
     )
+    bpy.types.Scene.autosculpt_generation_mode = bpy.props.EnumProperty(
+        name="Generation Mode",
+        description="Choose how to generate the 3D model",
+        items=[
+            ("AUTO", "Auto", "Meshy.ai if available, otherwise AI sculpt"),
+            ("MESHY", "Meshy 3D", "Use Meshy.ai to generate a professional 3D model (requires API key)"),
+            ("SCULPT", "AI Sculpt", "Use the AI provider to generate mesh data with sculpting operations"),
+        ],
+        default="AUTO",
+    )
     bpy.types.Scene.autosculpt_youtube_search = bpy.props.StringProperty(
         name="YouTube Search",
         description="Search queries for YouTube tutorials (comma-separated, leave empty for defaults)",
@@ -135,6 +147,18 @@ def register():
         name="YouTube Playlists",
         description="YouTube playlist URLs to scrape (comma-separated)",
         default="",
+    )
+    bpy.types.Scene.autosculpt_learning_urls = bpy.props.StringProperty(
+        name="Learning URLs",
+        description="YouTube URLs or playlist URLs for the AI to study (comma-separated)",
+        default="",
+        maxlen=8192,
+    )
+    bpy.types.Scene.autosculpt_learning_report = bpy.props.StringProperty(
+        name="Learning Report",
+        description="Report from the last learning session",
+        default="",
+        maxlen=16384,
     )
 
     print("Auto Sculptor AI: Registered successfully")
@@ -158,15 +182,14 @@ def unregister():
         "autosculpt_progress",
         "autosculpt_status",
         "autosculpt_provider",
+        "autosculpt_generation_mode",
         "autosculpt_youtube_search",
         "autosculpt_youtube_playlists",
+        "autosculpt_learning_urls",
+        "autosculpt_learning_report",
     ]
     for prop in props:
         if hasattr(bpy.types.Scene, prop):
             delattr(bpy.types.Scene, prop)
 
-    print("Auto Sculptor AI: Unregistered successfully")
-
-
-if __name__ == "__main__":
-    register()
+    print("Auto Sculptor AI: Unregistered")

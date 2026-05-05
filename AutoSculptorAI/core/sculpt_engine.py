@@ -3,6 +3,7 @@ import os
 from .ai_client import AIClient
 from .reference_analyzer import ReferenceAnalyzer
 from ..knowledge.knowledge_base import KnowledgeBase
+from .learning_engine import LearningEngine
 
 
 class SculptEngine:
@@ -18,8 +19,96 @@ class SculptEngine:
         self.symmetry = config.get("symmetry", True)
         self.ref_image_path = config.get("ref_image_path")
         self.knowledge_db_path = config.get("knowledge_db_path")
+        self.meshy_api_key = config.get("meshy_api_key", "")
+        self.generation_mode = config.get("generation_mode", "AUTO")
+        self._progress_callback = None
+
+    def set_progress_callback(self, callback):
+        self._progress_callback = callback
+
+    def _resolve_mode(self):
+        """Decide which generation tool to use based on explicit user choice."""
+        mode = self.generation_mode
+        if mode == "MESHY":
+            if not self.meshy_api_key:
+                raise ValueError(
+                    "Meshy 3D mode selected but no Meshy API key is set. "
+                    "Add your key in addon preferences or switch to AI Sculpt mode."
+                )
+            return "meshy"
+        elif mode == "SCULPT":
+            return "llm"
+        else:
+            if self.meshy_api_key:
+                return "meshy"
+            return "llm"
 
     def generate(self):
+        resolved = self._resolve_mode()
+        if self._progress_callback:
+            self._progress_callback(f"Using {'Meshy 3D' if resolved == 'meshy' else 'AI Sculpt'} mode...", 5.0)
+        if resolved == "meshy":
+            return self._generate_with_meshy()
+        return self._generate_with_llm()
+
+    def _generate_with_meshy(self):
+        try:
+            from .meshy_client import MeshyClient
+
+            enhanced_prompt = self._build_meshy_prompt()
+
+            client = MeshyClient(self.meshy_api_key)
+
+            model_type = "standard"
+            if self.detail_level == "LOW":
+                model_type = "lowpoly"
+
+            result = client.text_to_3d(
+                prompt=enhanced_prompt,
+                model_type=model_type,
+                enable_pbr=True,
+                target_format="glb",
+                on_progress=self._progress_callback,
+            )
+
+            return {
+                "success": True,
+                "mode": "meshy",
+                "file_path": result["file_path"],
+                "format": result["format"],
+                "texture_urls": result.get("texture_urls", {}),
+            }
+
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    def _build_meshy_prompt(self):
+        """Enrich the user prompt with knowledge and reference analysis for Meshy."""
+        parts = [self.prompt]
+
+        if self.ref_image_path and os.path.isfile(self.ref_image_path):
+            try:
+                analyzer = ReferenceAnalyzer(self.config)
+                analysis = analyzer.analyze(self.ref_image_path)
+                if analysis:
+                    parts.append(f"Reference details: {analysis}")
+            except Exception:
+                pass
+
+        kb = KnowledgeBase(db_path=self.knowledge_db_path)
+        builtin = kb.get_builtin_knowledge(self.prompt)
+        scraped = kb.get_relevant_knowledge(self.prompt)
+        knowledge = ""
+        if builtin and scraped:
+            knowledge = builtin + " " + scraped
+        elif builtin or scraped:
+            knowledge = builtin or scraped
+        if knowledge:
+            parts.append(f"Style guidance: {knowledge[:200]}")
+
+        return ". ".join(parts)[:600]
+
+    def _generate_with_llm(self):
         try:
             reference_analysis = None
             if self.ref_image_path and os.path.isfile(self.ref_image_path):
@@ -34,6 +123,14 @@ class SculptEngine:
                 knowledge_context = builtin_context + "\n\n" + scraped_context
             else:
                 knowledge_context = builtin_context or scraped_context
+
+            le = LearningEngine(db_path=self.knowledge_db_path)
+            learned_rules = le.format_rules_for_prompt(self.prompt)
+            if learned_rules:
+                if knowledge_context:
+                    knowledge_context += "\n\n" + learned_rules
+                else:
+                    knowledge_context = learned_rules
 
             enhanced_prompt = self._enhance_prompt(self.prompt)
 
@@ -57,6 +154,7 @@ class SculptEngine:
 
             return {
                 "success": True,
+                "mode": "llm",
                 "mesh_data": mesh_data,
                 "api_key": self.config.get("api_key", ""),
                 "model": self.config.get("model", ""),
