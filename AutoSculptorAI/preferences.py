@@ -32,6 +32,13 @@ class AutoSculptorPreferences(AddonPreferences):
         default="llama3",
     )
 
+    meshy_api_key: StringProperty(
+        name="Meshy API Key",
+        description="Your Meshy.ai API key for text-to-3D generation (get one at meshy.ai)",
+        default="",
+        subtype="PASSWORD",
+    )
+
     openai_model: EnumProperty(
         name="OpenAI Model",
         description="OpenAI model to use for generation",
@@ -94,6 +101,11 @@ class AutoSculptorPreferences(AddonPreferences):
         box.label(text="Ollama Settings (Local)", icon="DESKTOP")
         box.prop(self, "ollama_url")
         box.prop(self, "ollama_model")
+
+        box = layout.box()
+        box.label(text="Meshy.ai (3D Generation)", icon="MESH_MONKEY")
+        box.prop(self, "meshy_api_key")
+        box.label(text="Get a key at meshy.ai/settings/api", icon="INFO")
 
         box = layout.box()
         box.label(text="Knowledge Base", icon="FILE_FOLDER")

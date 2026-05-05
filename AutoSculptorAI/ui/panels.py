@@ -13,9 +13,14 @@ class AUTOSCULPT_PT_MainPanel(Panel):
         layout = self.layout
         scene = context.scene
 
+        prefs = context.preferences.addons.get("AutoSculptorAI")
+        has_meshy = prefs and prefs.preferences.meshy_api_key
+
         box = layout.box()
         box.label(text="AI Provider", icon="WORLD")
         box.prop(scene, "autosculpt_provider", text="")
+        if has_meshy:
+            box.label(text="Meshy.ai active (3D generation)", icon="CHECKMARK")
 
         box = layout.box()
         box.label(text="Sculpt from Prompt", icon="SCULPTMODE_HLT")
