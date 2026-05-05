@@ -17,6 +17,8 @@ class AUTOSCULPT_OT_Generate(Operator):
     _error = None
     _running = False
     _generation_id = 0
+    _progress_msg = ""
+    _progress_pct = 0.0
 
     @classmethod
     def poll(cls, context):
@@ -41,17 +43,21 @@ class AUTOSCULPT_OT_Generate(Operator):
         provider = scene.autosculpt_provider
         prefs_data = prefs.preferences
 
-        if provider == "OPENAI" and not prefs_data.openai_api_key:
-            self.report({"ERROR"}, "OpenAI API key not set. Check addon preferences.")
-            return {"CANCELLED"}
-        elif provider == "ANTHROPIC" and not prefs_data.anthropic_api_key:
-            self.report({"ERROR"}, "Anthropic API key not set. Check addon preferences.")
-            return {"CANCELLED"}
+        has_meshy = bool(prefs_data.meshy_api_key)
+        if not has_meshy:
+            if provider == "OPENAI" and not prefs_data.openai_api_key:
+                self.report({"ERROR"}, "OpenAI API key not set. Check addon preferences.")
+                return {"CANCELLED"}
+            elif provider == "ANTHROPIC" and not prefs_data.anthropic_api_key:
+                self.report({"ERROR"}, "Anthropic API key not set. Check addon preferences.")
+                return {"CANCELLED"}
 
         scene.autosculpt_status = "Initializing..."
         scene.autosculpt_progress = 0.0
         AUTOSCULPT_OT_Generate._result = None
         AUTOSCULPT_OT_Generate._error = None
+        AUTOSCULPT_OT_Generate._progress_msg = ""
+        AUTOSCULPT_OT_Generate._progress_pct = 0.0
         AUTOSCULPT_OT_Generate._generation_id += 1
         AUTOSCULPT_OT_Generate._running = True
 
@@ -86,9 +92,20 @@ class AUTOSCULPT_OT_Generate(Operator):
                 config["ollama_url"] = prefs_data.ollama_url
                 config["model"] = prefs_data.ollama_model
 
+            if prefs_data.meshy_api_key:
+                config["use_meshy"] = True
+                config["meshy_api_key"] = prefs_data.meshy_api_key
+
             engine = SculptEngine(config)
 
             gen_id = AUTOSCULPT_OT_Generate._generation_id
+
+            def progress_cb(msg, pct):
+                if AUTOSCULPT_OT_Generate._generation_id == gen_id:
+                    AUTOSCULPT_OT_Generate._progress_msg = msg
+                    AUTOSCULPT_OT_Generate._progress_pct = pct
+
+            engine.set_progress_callback(progress_cb)
 
             def run_generation():
                 try:
@@ -126,6 +143,10 @@ class AUTOSCULPT_OT_Generate(Operator):
 
         scene = context.scene
 
+        if AUTOSCULPT_OT_Generate._progress_msg:
+            scene.autosculpt_status = AUTOSCULPT_OT_Generate._progress_msg
+            scene.autosculpt_progress = AUTOSCULPT_OT_Generate._progress_pct
+
         if AUTOSCULPT_OT_Generate._error:
             error = AUTOSCULPT_OT_Generate._error
             AUTOSCULPT_OT_Generate._error = None
@@ -144,6 +165,65 @@ class AUTOSCULPT_OT_Generate(Operator):
             AUTOSCULPT_OT_Generate._result = None
 
             if result and result.get("success"):
+                mode = result.get("mode", "llm")
+
+                if mode == "meshy":
+                    file_path = result.get("file_path", "")
+                    fmt = result.get("format", "glb")
+                    if file_path and os.path.isfile(file_path):
+                        if fmt == "obj":
+                            bpy.ops.wm.obj_import(filepath=file_path)
+                        elif fmt == "fbx":
+                            bpy.ops.import_scene.fbx(filepath=file_path)
+                        else:
+                            bpy.ops.import_scene.gltf(filepath=file_path)
+                        imported = context.selected_objects
+                        if imported:
+                            obj = imported[0]
+                            obj["autosculpt_generated"] = True
+                            obj["autosculpt_prompt"] = scene.autosculpt_prompt
+                            scene.autosculpt_status = "Generation complete! (Meshy.ai)"
+                            scene.autosculpt_progress = 100.0
+                            self.report({"INFO"}, f"3D model imported: {obj.name}")
+
+                            if scene.autosculpt_use_texture and scene.autosculpt_texture_image:
+                                from ..core.texture_engine import TextureEngine
+
+                                tex_config = {
+                                    "provider": scene.autosculpt_provider,
+                                    "api_key": "",
+                                    "model": "",
+                                }
+                                prefs_tex = context.preferences.addons.get("AutoSculptorAI")
+                                if prefs_tex:
+                                    p = prefs_tex.preferences
+                                    if scene.autosculpt_provider == "OPENAI":
+                                        tex_config["api_key"] = p.openai_api_key
+                                        tex_config["model"] = p.openai_model
+                                    elif scene.autosculpt_provider == "ANTHROPIC":
+                                        tex_config["api_key"] = p.anthropic_api_key
+                                        tex_config["model"] = p.anthropic_model
+                                    elif scene.autosculpt_provider == "OLLAMA":
+                                        tex_config["ollama_url"] = p.ollama_url
+                                        tex_config["model"] = p.ollama_model
+                                tex_engine = TextureEngine(tex_config)
+                                tex_path = bpy.path.abspath(scene.autosculpt_texture_image)
+                                if os.path.isfile(tex_path):
+                                    tex_engine.extract_and_apply(obj, tex_path)
+                                    self.report({"INFO"}, "Texture applied successfully")
+
+                            return {"FINISHED"}
+                        else:
+                            scene.autosculpt_status = "Failed to import model"
+                            scene.autosculpt_progress = 0.0
+                            self.report({"ERROR"}, f"{fmt.upper()} file imported but no objects found")
+                            return {"CANCELLED"}
+                    else:
+                        scene.autosculpt_status = "Model file not found"
+                        scene.autosculpt_progress = 0.0
+                        self.report({"ERROR"}, f"Downloaded model not found: {file_path}")
+                        return {"CANCELLED"}
+
                 from ..core.mesh_generator import MeshGenerator
 
                 generator = MeshGenerator()
