@@ -13,16 +13,34 @@ class AUTOSCULPT_PT_MainPanel(Panel):
         layout = self.layout
         scene = context.scene
 
+        prefs = context.preferences.addons.get("AutoSculptorAI")
+        has_meshy = prefs and prefs.preferences.meshy_api_key
+
+        box = layout.box()
+        box.label(text="Generation Mode", icon="TOOL_SETTINGS")
+        box.prop(scene, "autosculpt_generation_mode", text="")
+
+        gen_mode = scene.autosculpt_generation_mode
+        if gen_mode == "MESHY" or (gen_mode == "AUTO" and has_meshy):
+            if has_meshy:
+                box.label(text="Will use: Meshy 3D (professional model)", icon="MESH_MONKEY")
+            else:
+                box.label(text="No Meshy key — will use AI Sculpt", icon="ERROR")
+        elif gen_mode == "SCULPT":
+            box.label(text="Will use: AI Sculpt (LLM mesh generation)", icon="SCULPTMODE_HLT")
+        else:
+            box.label(text="Will use: AI Sculpt (no Meshy key)", icon="SCULPTMODE_HLT")
+
         box = layout.box()
         box.label(text="AI Provider", icon="WORLD")
         box.prop(scene, "autosculpt_provider", text="")
 
         box = layout.box()
-        box.label(text="Sculpt from Prompt", icon="SCULPTMODE_HLT")
-        box.prop(scene, "autosculpt_prompt", text="", icon="TEXT")
+        box.label(text="Prompt", icon="TEXT")
+        box.prop(scene, "autosculpt_prompt", text="")
         row = box.row(align=True)
         row.scale_y = 1.5
-        row.operator("autosculpt.generate", text="Generate Sculpt", icon="PLAY")
+        row.operator("autosculpt.generate", text="Generate", icon="PLAY")
         row.operator("autosculpt.cancel", text="", icon="CANCEL")
 
         if scene.autosculpt_progress > 0:
